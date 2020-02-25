@@ -1,0 +1,56 @@
+# Blosxom Plugin: better_title
+# Author(s): Tony Williams <tonyw@honestpuck.com> http://honestpuck.com/
+# Version: 1.0b
+# Blosxom Home/Docs/Licensing: http://www.raelity.org/apps/blosxom/
+# Blosxom Plugin Docs: http://www.raelity.org/apps/blosxom/plugin.shtml
+
+# Copyright 2003 Tony Williams
+# Released under the same License as Blosxom
+
+package better_title;
+
+use CGI qw/:standard/;
+
+# --- Configurable variables -----
+
+# what is the character(s) between blog name and path or date
+my $name_sep = ' :: ';
+
+# what is the character(s) between parts of the date
+my $date_sep = ' ';
+
+# what is the character(s) between parts of path
+my $path_sep = ' : ';
+
+# --------------------------------
+
+$title; # use as $better_title::title in flavour templates
+
+sub start {
+  1;
+}
+
+sub head {
+  my($pkg, $currentdir, $head_ref) = @_;
+  
+  $title = $blosxom::blog_title;
+  
+  if ($our_path = path_info()) {
+      if ($currentdir) {
+          $title = join($path_sep, split('/', $currentdir));
+      } else {
+          my %num2month = ('01'=>'Jan', '02'=>'Feb', '03'=>'Mar',
+                           '04'=>'Apr', '05'=>'May', '06'=>'Jun',
+                           '07'=>'Jul', '08'=>'Aug', '09'=>'Sep',
+                           '10'=>'Oct', '11'=>'Nov', '12'=>'Dec');
+          my @date_bits = split('/', $our_path);
+          if ($date_bits[2]) {
+            $date_bits[2] = $num2month{$date_bits[2]};
+          }
+          $title = join($date_sep, reverse(@date_bits));
+      }
+      $title = $blosxom::blog_title . $name_sep . $title;
+  }
+}
+
+1;

@@ -1,0 +1,169 @@
+# https://web.archive.org/web/20030812174556/http://fletcher.freeshell.org/downloads/entriescache
+# Blosxom Plugin: entries_cache
+# Author(s): Fletcher T. Penney <http://fletcher.freeshell.org/> 
+# Version: 0.1
+# Based on entries_index by Rael Dornfest
+
+package entriescache;
+
+# --- Configurable variables -----
+
+$delay = 60;		# How many minutes delay before entries are re-indexed?
+					# (In minutes)
+
+$indexname = "$blosxom::plugin_state_dir/.entries_cache.index";
+
+# --------------------------------
+
+use File::stat;
+use File::Find;
+use Data::Dumper;
+use CGI qw/:standard/;
+
+my $time = time();
+my $reindex = 0;
+
+sub start {
+	# Force a reindex
+	$reindex = 1 if (CGI::param('reindex'));
+	
+	return 1;
+}
+
+sub entries {
+	return sub {
+		my(%files, %indexes);
+	
+		# Read cached index
+		if ( open CACHE, $indexname) {
+			my $index = join '', <CACHE>;
+			close CACHE;
+			$index =~ /\$VAR1 = \{/ and eval($index) and !$@ and %files = %$VAR1;
+			# See if it's time to reindex
+			$reindex = 1 if ( stat($indexname)->mtime lt ($time - $delay*60) );
+		} else {
+			$reindex = 1;
+		}
+
+
+		# Perform reindexing if necessary
+		# This code copied from entries_index
+		# Check to see if previously indexed files exist, and then rescan
+		# the datadir for any new files, while preserving the old times
+
+		if ($reindex eq 1) {
+			$reindex = 0;
+
+			for my $file (keys %files) { -f $file or do { $reindex++; delete $files{$file} }; }
+
+			find(
+				sub {
+					my $d; 
+					my $curr_depth = $File::Find::dir =~ tr[/][]; 
+					if ( $blosxom::depth and $curr_depth > $blosxom::depth ) {
+						$files{$File::Find::name} and delete $files{$File::Find::name};
+						return;
+					}
+     
+					$File::Find::name =~ m!^$blosxom::datadir/(?:(.*)/)?(.+)\.$blosxom::file_extension$!
+					and $2 ne 'index' and $2 !~ /^\./ and (-r $File::Find::name)
+					# to show or not to show future entries
+					and (
+						$blosxom::show_future_entries
+						or stat($File::Find::name)->mtime <= time
+					) 
+					and ( $files{$File::Find::name} || ++$reindex )
+					and ( $files{$File::Find::name} = $files{$File::Find::name} || stat($File::Find::name)->mtime )
+					# Static
+					and (
+						param('-all') 
+						or !-f "$blosxom::static_dir/$1/index." . $blosxom::static_flavours[0]
+						or stat("$blosxom::static_dir/$1/index." . $blosxom::static_flavours[0])->mtime < stat($File::Find::name)->mtime
+					)
+					and $indexes{$1} = 1
+					and $d = join('/', (blosxom::nice_date($files{$File::Find::name}))[5,2,3])
+					and $indexes{$d} = $d
+					and $blosxom::static_entries and $indexes{ ($1 ? "$1/" : '') . "$2.$blosxom::file_extension" } = 1;
+				}, $blosxom::datadir
+			);
+
+			if ( $reindex ) {
+				if ( open ENTRIES, "> $indexname" ) {
+					print ENTRIES Dumper \%files;
+					close ENTRIES;
+				} else {
+					warn "couldn't > $indexname: $!\n";
+				}
+			}
+		}
+	return (\%files, \%indexes);
+	}
+}
+ 
+1;
+
+__END__
+
+=head1 NAME
+
+Blosxom Plug-in: entries_cache
+
+=head1 SYNOPSIS
+
+The entries_cache plugin is a "souped-up" version of the entries_index plugin.  It maintains file modification times in the same manner as the original plugin, but goes one step further.  It uses the modification time of the index file to determine whether to rescan the datadir.  If $delay minutes have not passed, it relies on the cached information.
+
+The original blosxom and, if I read the code properly, the entries_index plugin rescan the datadir each time a page is viewed.  This plugin allows you to cache the information to speed up processing times on most page views.  According to several posts on the blosxom mailing list, this is one of the big processor hogs.  With a $delay setting of 60 minutes, there will only be one page view each hour that has to wait for the full directory scan.
+
+Honestly, I have not noticed much of a speed boost during my testing yet, but I imagine it would only appear for sites with a large number of files to be indexed.
+
+You can force a manual scan by appending ?reindex=y to the end of the url.
+
+
+=head1 VERSION
+
+0.1
+
+=head1 AUTHOR
+
+Fletcher T. Penney
+
+based on original code by:
+Rael Dornfest  <rael@oreilly.com>, http://www.raelity.org/
+
+=head1 SEE ALSO
+
+Blosxom Home/Docs/Licensing: http://www.raelity.org/apps/blosxom/
+
+Blosxom Plugin Docs: http://www.raelity.org/apps/blosxom/plugin.shtml
+
+=head1 BUGS
+
+Address bug reports and comments to the Blosxom mailing list 
+[http://www.yahoogroups.com/group/blosxom].
+
+=head1 LICENSE
+
+entries_cache plugin
+Copyright 2003, Fletcher Penney
+except for portions copied from entries_index
+
+Blosxom and original entries_index plugin
+Copyright 2003, Rael Dornfest 
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.

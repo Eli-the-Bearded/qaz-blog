@@ -1,0 +1,12 @@
+# First disable server parsing of ".html" files as either PHP or SHTML
+php_flag engine off
+RemoveHandler .html
+
+# Then override the mimetype for ".html"
+<Files *.html>
+ ForceType text/plain
+</Files>
+
+<Files *.1993>
+ ForceType text/plain
+</Files>

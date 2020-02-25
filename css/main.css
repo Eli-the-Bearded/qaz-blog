@@ -1,0 +1,56 @@
+body              { font-family: Verdana,Geneva,Arial,Sans-serif; 
+                    font-size: 14px; color: #333; background: white;
+		  }
+
+a                 { color: black; }
+
+h2                { color: black;
+                    font-weight: bold; font-size:20px;
+                  }
+
+h3                { color: black;
+                    font-weight: bold; font-size:16px;
+                  }
+
+.storytitle       { font-weight: bold; }
+
+.dateheader       { font-size: 14px; color: #333;
+                    font-style: italic;
+		    text-align: right;
+		  }
+
+
+.rootcats         { margin-left: 5px; }
+.subcats          { margin-left: 5px; }
+
+.pagetitle        { font-size: 20px; font-weight: bold;
+                    color: #369; position: absolute;
+		    left: 0px; top: 0px; height: 101px;
+		  }
+
+.pageinfo         { font-size: 16px; font-weight: bold;
+                    color: #369; position: absolute;
+		    right: 0px; top: 80px;
+		  }
+
+.leftcol          { background: #6c9; margin: 0px; padding: 1%;
+                    position: absolute; left: 0px; top: 102px;
+		    width: 18%;
+		  }
+
+.mainblock        { background: #9fc; margin: 0px; padding: 1%;
+                    position: absolute; right: 0px; top: 102px;
+		    width: 78%;
+		  }
+
+.score            { background: #369; margin: 0px;
+		    position: absolute; top: 101px; left: 0px;
+                    width: 100%; height: 1px;
+		  }
+
+.star             { background: transparent
+                          url(/qz/img/star.png)
+			  no-repeat bottom center;
+		    display: block; position: relative;
+		    bottom: 0px; width: 100%; height: 50px;
+		  }

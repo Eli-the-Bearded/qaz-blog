@@ -1,0 +1,17 @@
+# Options ExecCGI FollowSymLinks
+# AllowOverride All
+AddType application/x-httpd-cgi .cgi
+DirectoryIndex blosxom
+<Files blosxom>
+  SetHandler cgi-script
+</Files>
+
+AddOutputFilterByType DEFLATE text/html
+
+RewriteEngine on
+
+# host != qaz.wtf (NoCase)
+RewriteCond %{HTTP_HOST} !^qaz.wtf [NC]
+
+RewriteRule ^(.*) https://qaz.wtf/qz/$1 [R=301]
+
