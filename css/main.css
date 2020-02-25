@@ -3,6 +3,7 @@ body              { font-family: Verdana,Geneva,Arial,Sans-serif;
 		  }
 
 a                 { color: black; }
+a.logo_home_link  { text-decoration: none; }
 
 h2                { color: black;
                     font-weight: bold; font-size:20px;
