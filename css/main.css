@@ -39,7 +39,6 @@ h3                { color: black;
 
 .leftcol          { background: #6c9; margin: 0; padding: 1%;
                     margin: 0; left: 0; top: 102px;
-		    width: 18%;
 		  }
 
 .mainblock        { background: #9fc; margin: 0; padding: 1%;
@@ -61,9 +60,10 @@ h3                { color: black;
 
 .topnav           { display: none; }
 .wrapper          { position: relative; height: 100%; padding: 0; margin: 0; }
-.legal            { z-index: 999;  bottom: -2em;  }
+.legal            { bottom: -2em;  }
 
 #page_wrapper     { top: 0; left: 0; width: 100% }
+#left_wrapper     { width: 20% }
 
 Pre { background-color: black; color: #94ed30;  border: 1px dashed gray;
       font-weight: bold; font-family: courier,monospace;
