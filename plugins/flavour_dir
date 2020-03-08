@@ -1,0 +1,99 @@
+# Blosxom Plugin: flavour_dir
+# Author(s): Eli the Bearded <blossom@eli.users.panix.com>
+# Version: 2020-03-06
+# Documentation: See the bottom of this file or type: perldoc flavour_dir
+
+package flavour_dir;
+use FileHandle;
+
+# plugin configuration {
+
+# priority directory to look for flavour templates
+# if it starts with / will be used as-is, otherwise will be
+# prefixed with $datadir
+our $flavour_dir = '../flavours';
+
+# } end plugin configuration
+
+sub start {
+  1;
+}
+
+# template() is a tricky one, it is supposed to return a *function* that
+# is used to read the templates in, instead of the standard template
+# reader.
+sub template {
+    # this is the standard $template from blosxom 2.1.2 with a change in
+    # flavour.
+    return sub {
+        # flavour_dir: trick to us the main variables in this function
+        package blosxom;
+	my ( $path, $chunk, $flavour ) = @_;
+
+        # flavour_dir: but we need a local version of $fh
+        my $fh = new FileHandle;
+
+        my $fdir = $flavour_dir::flavour_dir;
+        if ($fdir !~ m:^/:) {
+            $fdir = "$datadir/$fdir";
+        }
+
+        # if a template is found in the flavour dir, use that
+        return join '', <$fh>
+		if $fh->open("< $fdir/$chunk.$flavour");
+
+	# otherwise go back to the original search method
+	do {
+	    return join '', <$fh>
+		if $fh->open("< $datadir/$path/$chunk.$flavour");
+	} while ( $path =~ s/(\/*[^\/]*)$// and $1 );
+
+	# Check for definedness, since flavour can be the empty string
+	if ( defined $template{$flavour}{$chunk} ) {
+	    return $template{$flavour}{$chunk};
+	}
+	elsif ( defined $template{error}{$chunk} ) {
+	    return $template{error}{$chunk};
+	}
+	else {
+	    return '';
+	}
+    };
+}
+
+# Perl requires that packages must return a true value.
+1;
+
+__END__
+
+Now some "perldoc" documentation, from =head1 to =cut, with sections marked
+by =COMMAND lines, which need blank lines on either side.
+
+=head1 NAME
+
+Blosxom Plug-in: flavour_dir
+
+=head1 SYNOPSIS
+
+Allow a blog to have the templates outside of the $datadir (but fall back to
+searching the $datadir). Practically a rip off of the demo plugin in the
+documentation. See U<http://blosxom.sourceforge.net/documentation/developers/plugins.html>
+
+=head1 VERSION
+
+2020-02-06
+
+=head1 AUTHOR
+
+Eli the Bearded <blossom@eli.users.panix.com>
+
+=head1 SEE ALSO
+
+Blosxom, http://blosxom.sourceforge.net/
+
+=head1 LICENSE
+
+Public domain.
+
+=cut
+

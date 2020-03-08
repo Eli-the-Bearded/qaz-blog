@@ -1,0 +1,109 @@
+# Blosxom Plugin: april_fools
+# Author(s): Eli the Bearded <blossom@eli.users.panix.com>
+# Version: 2020-03-06
+# Documentation: See the bottom of this file or type: perldoc april_fools
+
+package april_fools;
+use FileHandle;
+
+# plugin configuration {
+
+# flavour file extension for April Fools Day
+our $april_flavour = 'april';
+
+# } end plugin configuration
+
+# start() is used to check if the plugin should be activated.
+# return 1 for yes, use this plugin, and 0 for no, deactivate
+# it's important to deactivate when not used, because only one
+# active plugin can use template()
+sub start {
+  my $mon; my $day;
+  ($mon, $day) = (localtime(time))[3,4];
+
+  # recall that localtime() returns months numbered from 0 -> January
+  if ($mon == 3 and $day == 1) {
+    return 1;
+  }
+
+  # lie silently in waiting
+  0;
+}
+
+# template() is a tricky one, it is supposed to return a *function* that
+# is used to read the templates in, instead of the standard template
+# reader. We'll use this to override the default flavour (and
+# again, start() makes this only active on April 1st).
+sub template {
+    # this is the standard $template from blosxom 2.1.2 with a change in
+    # flavour.
+    return sub {
+        # april_fools: trick to us the main variables in this function
+        package blosxom;
+	my ( $path, $chunk, $flavour ) = @_;
+
+        # april_fools: but we need a local version of $fh
+        my $fh = new FileHandle;
+
+        # april_fools: and here's the real work
+        if ( $flavour eq $default_flavour ) { $flavour = $april_fools::april_flavour; }
+
+	do {
+	    return join '', <$fh>
+		if $fh->open("< $datadir/$path/$chunk.$flavour");
+	} while ( $path =~ s/(\/*[^\/]*)$// and $1 );
+
+	# Check for definedness, since flavour can be the empty string
+	if ( defined $template{$flavour}{$chunk} ) {
+	    return $template{$flavour}{$chunk};
+	}
+	elsif ( defined $template{error}{$chunk} ) {
+	    return $template{error}{$chunk};
+	}
+	else {
+	    return '';
+	}
+    };
+}
+
+# end() runs after everything else, someone viewing the source will see
+# this message at the very end of the source
+sub end {
+  print "<!-- April Fools to You! -->";
+}
+
+# Perl requires that packages must return a true value.
+1;
+
+__END__
+
+Now some "perldoc" documentation, from =head1 to =cut, with sections marked
+by =COMMAND lines, which need blank lines on either side.
+
+=head1 NAME
+
+Blosxom Plug-in: april_fools
+
+=head1 SYNOPSIS
+
+On April 1st, localtime, replaces the standard flavour with the C<.april>
+flavour. Written mostly as a demo.
+
+=head1 VERSION
+
+2020-02-06
+
+=head1 AUTHOR
+
+Eli the Bearded <blossom@eli.users.panix.com>
+
+=head1 SEE ALSO
+
+Blosxom, http://blosxom.sourceforge.net/
+
+=head1 LICENSE
+
+Public domain.
+
+=cut
+
