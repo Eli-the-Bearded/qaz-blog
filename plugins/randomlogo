@@ -31,7 +31,7 @@ my $height_re = "-h(\\d+)[.-]";
 # %w is the width, as pulled out of the filename with $width_re
 # %h is the height, as pulled out of the filename with $height_re
 # %% is a literal %
-my $imgtmpl = "<img src=/qz/logos/%f alt=QZ width=%w height=%h align=left>";
+my $imgtmpl = "<img src='/qz/logos/%f' alt=QZ width=%w height=%h class=alignleft>";
 
 # Used when no logo is found
 my $errorlogo =  'Q<!-- no logo found -->Z';
