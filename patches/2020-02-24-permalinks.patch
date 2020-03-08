@@ -1,0 +1,37 @@
+--- versions/blosxom-2.1.2-configured	2020-02-22 20:49:49.619048000 -0500
++++ blosxom.cgi	2020-02-25 01:16:14.428771000 -0500
+@@ -2,7 +2,8 @@
+ 
+ # Blosxom
+ # Author: Rael Dornfest (2002-2003), The Blosxom Development Team (2005-2008)
+-# Version: 2.1.2 ($Id: blosxom.cgi,v 1.85 2008/10/02 01:09:41 xtaran Exp $)
++# QZ patch version 2020 Eli the Bearded https://qaz.wtf/qz/
++# Version: 2.1.2QZ
+ # Home/Docs/Licensing: http://blosxom.sourceforge.net/
+ # Development/Downloads: http://sourceforge.net/projects/blosxom
+ 
+@@ -87,7 +88,7 @@
+ # --------------------------------
+ 
+ use vars
+-    qw! $version $blog_title $blog_description $blog_language $blog_encoding $datadir $url %template $template $depth $num_entries $file_extension $default_flavour $static_or_dynamic $config_dir $plugin_list $plugin_path $plugin_dir $plugin_state_dir @plugins %plugins $static_dir $static_password @static_flavours $static_entries $path_info_full $path_info $path_info_yr $path_info_mo $path_info_da $path_info_mo_num $flavour $static_or_dynamic %month2num @num2month $interpolate $entries $output $header $show_future_entries %files %indexes %others $encode_xml_entities $content_type !;
++    qw! $version $blog_title $blog_description $blog_language $blog_encoding $datadir $url %template $template $depth $num_entries $file_extension $default_flavour $static_or_dynamic $config_dir $plugin_list $plugin_path $plugin_dir $plugin_state_dir @plugins %plugins $static_dir $static_password @static_flavours $static_entries $path_info_full $path_info $path_info_yr $path_info_mo $path_info_da $path_info_mo_num $flavour $static_or_dynamic %month2num @num2month $interpolate $entries $output $header $show_future_entries %files %indexes %others $encode_xml_entities $content_type $use_permalink !;
+ 
+ use strict;
+ use FileHandle;
+@@ -638,9 +639,12 @@
+                 = $path_file =~ m!^$datadir/(?:(.*)/)?(.*)\.$file_extension!;
+ 
+             # Only stories in the right hierarchy
+-            $path =~ /^$currentdir/
+-                or $path_file eq "$datadir/$currentdir"
+-                or next;
++	    # ETB: modified for use_permalink bypass
++	    if($use_permalink) { 1; } else {
++		    $path =~ /^$currentdir/
++			or $path_file eq "$datadir/$currentdir"
++			or next;
++	    }
+ 
+             # Prepend a slash for use in templates only if a path exists
+             $path &&= "/$path";

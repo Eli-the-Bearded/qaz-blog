@@ -9,7 +9,7 @@ https://qaz.wtf/qz/blosxom/2020/03/08/new-plugins
   * improved css / html
   
 https://qaz.wtf/qz/blosxom/2020/02/25/first-patch
-2020-02-25 
+`2020-02-24-permalinks.patch`
   * fix plugins to work with each other, bugfixing permalinks
   * better content-type
   * logo is link to main page
