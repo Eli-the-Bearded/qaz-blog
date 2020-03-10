@@ -4,10 +4,15 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/03/09/bot-traffic
+  * explaining the why of `browser_block`
+
 https://qaz.wtf/qz/blosxom/2020/03/08/new-plugins
   * wrote a pair of `template()` plugins
   * improved css / html
-  
+
+https://qaz.wtf/qz/blosxom/2020/02/28/about-post-ordering
+
 https://qaz.wtf/qz/blosxom/2020/02/25/first-patch
 `2020-02-24-permalinks.patch`
   * fix plugins to work with each other, bugfixing permalinks

@@ -1,0 +1,85 @@
+# Blosxom Plugin: browser_block
+# Author(s): Eli the Bearded <blossom@eli.users.panix.com>
+# Version: 2020-03-09
+# Documentation: See the bottom of this file or type: perldoc browser_block
+
+package browser_block;
+use CGI qw/:standard/;
+
+# plugin configuration {
+
+# what to block
+#    Megaindex.com is an SEO research site, for other people
+#                  to get access to who links to them, etc.
+#    Majestic.com (which runs MJ12bot) is similar.
+# I block both because they each load more pages than Google
+# for 100% zero value to me.
+our $block_re = qr/MegaIndex[.](ru|com)|MJ12bot/i;
+
+# tell the viewer what user agent was blocked (for debug)
+our $verbose = 0;
+
+# } end plugin configuration
+
+# start() is used to check if the plugin should be activated.
+# return 1 for yes, use this plugin, and 0 for no, deactivate
+sub start {
+  return 1 if (defined($ENV{HTTP_USER_AGENT}) and 
+               $ENV{HTTP_USER_AGENT} =~ /$block_re/);
+
+  # nothing to do, this time
+  0;
+}
+
+sub skip {
+  # $...header is a HASH ref with parameters for CGI::header(), set
+  # a status there
+  ${$blosxom::header}{-status} = '403 Forbidden';
+
+  # $...output is the page contents, which will not be generated normally
+  # when skip() is in effect
+  $blosxom::output = '403 Forbidden';
+
+  if($verbose) { 
+    $blosxom::output .= "\n<p>$ENV{HTTP_USER_AGENT}: not allowed</p>\n";
+  }
+
+  # returning 1 disables all regular output
+  1;
+}
+
+# Perl requires that packages must return a true value.
+1;
+
+__END__
+
+Now some "perldoc" documentation, from =head1 to =cut, with sections marked
+by =COMMAND lines, which need blank lines on either side.
+
+=head1 NAME
+
+Blosxom Plug-in: browser_block
+
+=head1 SYNOPSIS
+
+Takes a regex to apply to the browser supplied C<User-Agent:> and blocks
+("403 Forbidden") matching user-agents. Useful, eg, for bad bots.
+
+=head1 VERSION
+
+2020-02-09
+
+=head1 AUTHOR
+
+Eli the Bearded <blossom@eli.users.panix.com>
+
+=head1 SEE ALSO
+
+Blosxom, http://blosxom.sourceforge.net/
+
+=head1 LICENSE
+
+Public domain.
+
+=cut
+
