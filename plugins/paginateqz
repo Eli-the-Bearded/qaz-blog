@@ -1,33 +1,97 @@
-# ETB: modified for blosxom 2.1.2QZ 
+# Blosxom Plugin:  paginateqz
+# Author(s):       Eli the Bearded <blossom@eli.users.panix.com>
+# Version:         0.50 -- 2020-03-11
+# URL:             https://qaz.wtf/qz/blosxom/new-paginate-plugin
+# Git:             https://github.com/eli-the-bearded/qaz-blog/
+# Documentation:   See the bottom of this file or type: perldoc paginateqz;
+#                  TL;DR: this combines cooluri (nice permalinks) with paginate
+#                  (a pagination plugin)
+
+# NOTE require blosxom 2.1.2QZ which has a permalink bypass on an
+#      input filter 
+
 package paginateqz;
 
 use vars qw( $prev_link $link_list $next_link $prev_url $next_url
-	     $curr_number $curr_url $curr_link $skip $page $pages 
-	     $curr_path %template);
+	     $curr_number $curr_url $curr_link $np_sep
+             $skip $page $pages 
+	     $curr_path %template $prev_ref $next_ref
+           );
 
-use CGI qw/param url/;
+use File::stat;
+use CGI qw/:standard :netscape/;
 
-# Grab the templates at start
 sub start { 
+  # Grab the templates at start
   while (<DATA>) {
     last if /^(__END__)?$/;
-    my($ct, $comp, $txt) = /^(\S+)\s(\S+)\s(.*)$/;
+    my($flav, $comp, $txt) = /^(\S+)\s(\S+)\s(.*)$/;
     $txt =~ s/\\n/\n/mg;
-    $template{$ct}{$comp} = $txt;
+    $template{$flav}{$comp} = $txt;
   }
+  # init to blank
+  $prev_link = $link_list = $next_link = $prev_url = $next_url =
+    $curr_number = $curr_url = $curr_link = $np_sep = '';
   return 1;
 }
 
+
 # Count total stories & calculate # of stories to skip at filter time.
+# Also works out next / prev on permalinked stories (because those will
+# be filtered out here).
 sub filter {
   my ($pkg, $files_ref) = @_;
 
-  # ETB: no pagination on permalinks
-  if ($blosxom::use_permalink) {
-    $skip = 0;
-    $page = 1;
-    return 1;
+  if($ENV{HTTP_USER_AGENT} =~ /harness/) {
+    print STDERR "PAGINATE: Have: " .  path_info() . "\n";
   }
+  
+
+  # permalink test
+  if ($blosxom::static_or_dynamic eq 'dynamic' and
+    path_info() =~ m!^(/\d[^/]*/\d[^/]*/\d[^/]*/([a-zA-Z0-9][^/.]*))$!) {
+    my $pathname = $1;
+    my $filename = $2;
+    my $ext = $blosxom::file_extension;
+    my %dels;
+
+    # this is the default blosxom sorter: by date, newest first
+    foreach ( sort { $files_ref->{$b} <=> $files_ref->{$a} } keys %$files_ref ) {
+
+      if (m#/$filename\.$ext$#) {
+	# ETB: disables various other filters (needs QZ patched blosxom)
+	$blosxom::use_permalink = 1;
+      } else {
+	# deleting while tranversing is not safe
+	$dels{$_} = 1;
+        if ($blosxom::use_permalink) {
+	  # only update first time after setting use_permalink
+	  if(!defined($next_file)) {
+	    $next_file = $_;
+	  }
+	} else {
+	  # update each time until setting use_permalink
+	  $prev_file = $_;
+	}
+      }
+    }
+
+    # if an exact match was not found, don't do the deletes
+    if ($blosxom::use_permalink) {
+
+      for (keys %dels) {
+        delete $files_ref->{$_};
+      }
+
+      # page size is going to be just a single entry now and no skip
+      $page = 1;
+      $skip = 0;
+      
+      return 1;
+    }
+  }
+
+  # okay, not a permalink
 
   # How many pages in total?
   my $num_files = scalar( keys %$files_ref );
@@ -40,15 +104,50 @@ sub filter {
   $skip = $blosxom::num_entries * ($page-1);
 }
 
+# build a permalink url from blog URL and file name
+sub url_from_file {
+  my $fname = shift;
+  my $url = $blosxom::url;
+
+  return "" unless defined $fname;
+
+  my $when = stat($fname)->mtime;
+
+  return "" unless defined($when) and $when > 0;
+
+  # use blosxom date formatter from default entries()
+  $when = join( '/', ( &blosxom::nice_date($when) )[ 5, 2, 3 ] );
+
+  # ensure just one slash between blog base and filename by
+  # dropping any in configured base URL
+  $url =~ s#/+$##;
+
+  # isolate to just blog post name
+  $fname =~ s#.*/##;
+  $fname =~ s#\.$blosxom::file_extension$##;
+
+  return "$url/$when/$fname";
+}
+
 # Build previous & next links, as well as a list of available pages.
 sub head {
   my($pkg, $path, $head_ref) = @_;
 
-  # ETB: no pagination on permalinks
+  # pagination on permalinks is only next / prev
   if ($blosxom::use_permalink) {
-    $prev_link = "";
-    $next_link = "";
-    $link_list = "";
+    if($prev_file) { 
+      $prev_url  = url_from_file($prev_file);
+      $prev_link = fill_template('paginate_prev_link');
+    }
+    if($next_file) { 
+      $next_url  = url_from_file($next_file);
+      $next_link = fill_template('paginate_next_link');
+    }
+
+    if($next_url and $prev_url) {
+      $np_sep = fill_template('paginate_np_sep');
+    }
+
     return;
   }
 
@@ -56,7 +155,6 @@ sub head {
   $curr_path = $path;
 
   # Provide a previous page link, if needed.
-  $prev_link = "";
   if ($page > 1) {
     param("page" => $page - 1);
     $prev_url = url(-path_info=>1,-query=>1);
@@ -79,13 +177,15 @@ sub head {
   $link_list = join '', @list;
 
   # Provide a next page link, if needed.
-  $next_link = "";
   if (($page+1) < $pages) {
     param("page" => $page + 1);
     $next_url = url(-path_info=>1,-query=>1);
     $next_link = fill_template('paginate_next_link');
   }
 
+  if($next_url and $prev_url) {
+    $np_sep = fill_template('paginate_np_sep');
+  }
   return undef;
 }
 
@@ -102,33 +202,35 @@ sub sort {
   };
 }
 
-# Inspired by blosxom's template handling - load and fill template all in one
+# Use actual (blosxom or plugin-override) template / interpolate methods
 sub fill_template {
   my ($chunk) = @_;
-  my $fh = new FileHandle;
   my $tmpl = undef;
 
-  do {
-    $tmpl = join '', <$fh> if $fh->open("< $blosxom::datadir/$curr_path$chunk.$blosxom::flavour");
-  } while ($path =~ s/(\/*[^\/]*)$// and $1);
-
-  $tmpl = join '', ($template{$blosxom::flavour}{$chunk} || $template{error}{$chunk} || '')
-    if (!defined $tmpl);
-
-  $tmpl =~ s/(\$[\w:]+)/$1 . "||''"/gee;
+  $tmpl = &$blosxom::template("$blosxom::datadir/$curr_path", $chunk, $blosxom::flavour);
+  # fallback to default
+  if ($tmpl eq '') {
+     $tmpl = $template{$blosxom::flavour}{$chunk};
+     # if that exists
+     $tmpl = '' if(!defined($tmpl));
+  }
+  $tmpl = &$blosxom::interpolate($tmpl);
 
   return $tmpl;
 }
 
 1;
 
+# default templates in DATA section
+# flavour[SINGLE\s]template_name[SINGLE\s] template contents
 __DATA__
-html paginate_prev_link <a href="$prev_url">&#x21E0; newer</a>
-html paginate_next_link <a href="$next_url">older &#x21E2;</a>
-html paginate_list_start [ 
+html paginate_prev_link <a href="$paginateqz::prev_url">&#x21E0; newer</a>
+html paginate_next_link <a href="$paginateqz::next_url">older &#x21E2;</a>
+html paginate_np_sep  | 
+html paginate_list_start  [ 
 html paginate_list_join  | 
-html paginate_list_item <a href="$curr_url">$curr_number</a>
-html paginate_list_curr_item <b>$curr_number</b>
+html paginate_list_item <a href="$paginateqz::curr_url">$paginateqz::curr_number</a>
+html paginate_list_curr_item <b>$paginateqz::curr_number</b>
 html paginate_list_end  ] 
 __END__
 
@@ -163,7 +265,10 @@ Contains link to next page, is empty if a this link is not valid.
 
 The display of previous, next, and page
 links is customizable via flavoured templates (each with a .$flavour 
-extension):
+extension). Currently configured (e.g. other plugins) C<template()> and
+C<interpolate()> are used. If templates are not found by C<template()>,
+defaults will be tried. Use blank, but not zero length, templates to
+force empty. Only flavour "html" has defaults:
 
 =over 4
 
@@ -171,13 +276,19 @@ extension):
 
 Used to build a previous page link.
 
-Default: <a href="$prev_url">&lt;&lt;- prev</a>
+Default: <a href="$paginateqz::prev_url">&#x21E0; newer</a>
 
 =item * paginate_next_link
 
 Used to build a next page link.
 
-Default: <a href="$next_url">next -&gt;&gt;</a>
+Default: <a href="$paginateqz::next_url">older &#x21E2;</a>
+
+=item * paginate_np_sep
+
+Placed in between next_link and prev_link, only if both are set.
+
+Default: " | "
 
 =item * paginate_list_start
 
@@ -195,13 +306,13 @@ Default: " | "
 
 Used to display page list items other than the current page.
 
-Default: <a href="$curr_url">$curr_number</a>
+Default: <a href="$paginateqz::curr_url">$paginateqz::curr_number</a>
 
 =item * paginate_list_curr_item
 
 Used to display the current page in the list.
 
-Default: <b>$curr_number</b>
+Default: <b>$paginateqz::curr_number</b>
 
 =item * paginate_list_end 
 
@@ -215,33 +326,39 @@ By default, these templates construct simple links to blog pages.  In
 customizing these templates, many other forms of page navigation are
 possible.  For example, with a little bit of Javascript, the prev/next
 links can become buttons and the page list can become a drop-down selector.
-An example of this is included with the distribution archive for this
-plugin.
 
 =head1 VERSION
 
-v0.10
+v0.50
 
-=head1 AUTHOR
+=head1 AUTHORS
 
-l.m.orchard <deus_x@pobox.com> http://www.decafbad.com
-Version 0.10 by Eli the Bearded https://qaz.wtf/qz
+Original paginate: l.m.orchard <deus_x@pobox.com> http://www.decafbad.com
+
+Original cooluri: Rob Hague <rob@rho.org.uk> http://www.rho.org.uk/
+
+This hybrid version: Eli the Bearded https://qaz.wtf/qz
 
 =head1 SEE ALSO
 
-Paginate: http://www.decafbad.com/twiki/bin/view/Main/BlosxomPaginate
+Derived from Paginate: http://www.decafbad.com/twiki/bin/view/Main/BlosxomPaginate
+and Cool URIs for Blosxom: http://www.rho.org.uk/archive/blosxom/plugins/cooluri
 
-Blosxom Home/Docs/Licensing: http://www.raelity.org/apps/blosxom/
+Blosxom Home/Docs/Licensing: http://blosxom.sourceforge.net/
 
-Blosxom Plugin Docs: http://www.raelity.org/apps/blosxom/plugin.shtml
+Blosxom Plugin Docs: http://blosxom.sourceforge.net/documentation/developers/plugins.html
 
 =head1 BUGS
 
-Address bug reports and comments to the author.
+Address bug reports and comments to Eli the Bearded.
 
 =head1 LICENSE
 
-This Blosxom Plug-in is Copyright 2003, l.m.orchard 
+This Blosxom plugin is Copyright 2020, B. E. Griffin "Eli the Bearded"
+
+It uses parts from Blosxom plugin Paginate by l.m.orchard and 
+Blosxom plugin Cool URIs for Blosxom by Rob Hague, both of which were
+released with this license:
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
