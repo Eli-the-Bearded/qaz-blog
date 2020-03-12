@@ -4,6 +4,9 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/03/11/new-paginate-plugin
+  * combined permalink / paginate plugin
+
 https://qaz.wtf/qz/blosxom/2020/03/09/bot-traffic
   * explaining the why of `browser_block`
 
