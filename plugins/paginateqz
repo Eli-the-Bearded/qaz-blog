@@ -1,7 +1,7 @@
 # Blosxom Plugin:  paginateqz
 # Author(s):       Eli the Bearded <blossom@eli.users.panix.com>
 # Version:         0.50 -- 2020-03-11
-# URL:             https://qaz.wtf/qz/blosxom/new-paginate-plugin
+# URL:             https://qaz.wtf/qz/blosxom/2020/03/11/new-paginate-plugin
 # Git:             https://github.com/eli-the-bearded/qaz-blog/
 # Documentation:   See the bottom of this file or type: perldoc paginateqz;
 #                  TL;DR: this combines cooluri (nice permalinks) with paginate
