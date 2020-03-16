@@ -4,6 +4,12 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/03/16/ides-of-march-patch
+  * code reorder
+  * fix double-post bug
+  * update `$version`
+  * remove `-quiet` from cgi params
+
 https://qaz.wtf/qz/blosxom/2020/03/11/new-paginate-plugin
   * combined permalink / paginate plugin
 
