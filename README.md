@@ -4,6 +4,9 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/03/17/tags-plugin
+  * aaa_tags plugin
+
 https://qaz.wtf/qz/blosxom/2020/03/16/ides-of-march-patch
   * code reorder
   * fix double-post bug
@@ -30,3 +33,8 @@ https://qaz.wtf/qz/blosxom/2020/02/25/first-patch
 
 https://qaz.wtf/qz/blosxom/2020/02/23/how-its-built
   * Reboot day 2.
+
+
+In general:
+  * https://qaz.wtf/qz/blosxom?tag=blosxom
+  * https://qaz.wtf/qz/blosxom?tag=plugin
