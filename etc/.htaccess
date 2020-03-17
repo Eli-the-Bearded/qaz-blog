@@ -1,0 +1,5 @@
+AddType text/plain .sh
+
+<FilesMatch "^FIX.*">
+  Deny from all
+</FilesMatch>
