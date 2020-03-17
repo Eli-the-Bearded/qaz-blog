@@ -1,8 +1,4 @@
-<div class="pagination">
-<span class="page-prev">$paginateqz::prev_link</span>
-<span class="page-sep">$paginateqz::np_sep</span>
-<span class="page-next">$paginateqz::next_link</span>
-</div>
+<div class="pagination"><span class="page-prev">$paginateqz::prev_link</span> <span class="page-next">$paginateqz::next_link</span></div>
 
 </div><!-- end mainblock -->
 </div><!-- end main_wrapper -->
@@ -13,22 +9,14 @@
 <div class=leftcol>
 
    <br />
-   <h2>You Are Here</h2>
-   <p class=arehere>
-   $breadcrumbs::breadcrumbs<br /><br />
-   </p>
 
-   <h2>Sub-categories</h2>
-   <p class=subcats>
-   $menu::menu
-   </p>
-   <p class=subcatstotal>Items: $menu::subtotal</p>
+   <h2>Top Tags</h2>
+   <ol class=subcats><li>
+   $aaa_tags::top_tags
+   </li></ol>
 
-   <h2>Root-categories</h2>
-   <p class=rootcats>
-   $menu::rootmenu
-   </p>
-   <p class=rootcatstotal>Items: $menu::blogtotal</p>
+   <p class=subcatstotal>Tagged Items: $aaa_tags::story_count</p>
+   <p class=subcatstotal>Unique tags: $aaa_tags::tag_count</p>
 
    <br />
    <h2>$blog_title</h2>
@@ -45,7 +33,9 @@
 
    <h2>Under the hood</h2>
    <p class=blossom>
-   <a href="https://en.wikipedia.org/wiki/Blosxom">blosxom based</a>
+   <a href="https://en.wikipedia.org/wiki/Blosxom">blosxom</a>
+   <a href="https://github.com/eli-the-bearded/qaz-blog">based</a>
+   <br /><a href="$blosxom::url?tag=blosxom">(local changes)</a>
    </p>
 
    <div class=star></div>
