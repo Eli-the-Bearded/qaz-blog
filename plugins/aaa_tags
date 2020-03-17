@@ -1,0 +1,312 @@
+# Blosxom Plugin: aaa_tags
+# Author(s): Eli the Bearded <blossom@eli.users.panix.com>
+# Version: 2020-03-13
+# Documentation: See the bottom of this file or type: perldoc aaa_tags
+
+package aaa_tags;
+use CGI qw/:standard/;
+
+# --- Configurable variables -----
+
+# extension for tags files; tags are one per line, lines starting
+# with "#" are ignored, leading / trailing whitespace stripped,
+# internal whitespace normalized to single space.
+my $tgext = 'tags';
+
+# template{flavour}{template_name}; all {template_name}s can also be
+# flavour files in the regular location(s).
+my %template = (
+ html => {
+	   # join together entries in $aaa_tags::tags
+	   aaa_name_sep => ', ',
+
+	   # join together entries in $aaa_tags::top_tags
+	   aaa_tags_sep => '</li><li>',
+
+	   # value of $aaa_tags::tags if no tags on a story
+	   aaa_no_tags => 'no tags &mdash; so sad',
+
+           # format of each tag in in $aaa_tags::tags
+	   #   suggested variables to use:
+	   #       $aaa_tags::this_link		search for this tag
+	   #       $aaa_tags::this_tag          text name of this tag
+	   #       $aaa_tags::this_tagsafe      link-safe version of tag name
+	   #       $aaa_tags::this_count        how many articles with this tag
+	   #       $aaa_tags::tag_count         how many unique tags
+	   #       $aaa_tags::story_count       how many stories with tags
+	   aaa_tag_link => '<a href="$aaa_tags::this_link">$aaa_tags::this_tag ($aaa_tags::this_count)</a>',
+
+           # just like aaa_tag_link, but used in $aaa_tags::top_tags
+	   aaa_tags_link => '<a href="$aaa_tags::this_link">$aaa_tags::this_tag</a>: $aaa_tags::this_count',
+         },
+);
+
+# how many tags to show in $top_tags
+my $top_count = 20;
+
+# --- end configurable variables -
+# --------------------------------
+# variables for flavour templates, use with $aaa_tags:: in front, eg 
+# $aaa_tags::tags
+
+# any templates
+$top_tags = '';
+$tag_count = $story_count = 0;
+
+# only story template
+$tags = '';
+$this_count = '';
+$this_tag = '';
+$this_tagsafe = '';
+$this_link = '';
+
+# --- end template variables -----
+# --------------------------------
+
+# file name to tags
+our %map;
+# tag to number of matches
+our %alltags;
+our $want;
+
+sub start {
+  # look for a tag query
+  ($want) = (param("tag") =~ /^(\w[\w-]*\w?)$/); $want ||= '';
+  $want =~ tr:_: :;
+  $want = lc($want);
+  1;
+}
+
+# the filter() plugin is called after locating files and before story(). The
+# purpose is to, well, filter what stories will be shown. Such as only
+# including those matching a particular tag. It also does a pass over the
+# %others list to find tag files and load them up.
+sub filter {
+  my %dels;
+  my %keeps;
+  my @parts;
+
+  for my $other (%blosxom::others) {
+    if ($other =~ /(.+)[.]$tgext$/) {
+      my $story = $1 . '.' . $blosxom::file_extension;
+
+      if (!exists($blosxom::files{$story})) {
+        # don't process if no story
+        next;
+      }
+
+      # keeping $story as is would be handy for filtering,
+      # but it's less useful that way for finding tags during
+      # article display
+      $story =~ s,^$blosxom::datadir/+,/,;
+      if (open(my $fd, '<', $other)) {
+        my @tl;
+        while(<$fd>) {
+	  chomp;
+	  s/^\s+//;
+	  s/\s+$//;
+	  s/\s+/ /g;
+	  next if /^#/;
+	  next unless /\S/;
+	  $_ = lc($_);
+	  push (@tl, $_);
+	  $alltags{$_} ++;
+	  if (length($want)) {
+	    # we know to keep something if any single tag it has
+	    # is wanted, we won't know what to delete until all
+	    # tags are checked for a story
+	    if ($_ eq $want) {
+	      $keeps{"$blosxom::datadir$story"} = 1;
+	    }
+	  }
+	}
+	$story_count ++;
+        $map{$story} = \@tl;
+      } # if open "other" file
+    }
+  } # for others
+
+  # build top tags
+  for my $t (sort {  # rev numerical sort, reg alpha sort for ties
+			( $alltags{$b} <=> $alltags{$a} )
+			|| ($a cmp $b)
+	           } (keys %alltags)) {
+    $tag_count ++;
+    next if $tag_count > $top_count;
+    push(@parts, $t);
+  }
+
+  for(my $i = 0; $i < @parts; $i ++) {
+    $this_tag = $parts[$i];
+    mktag_link('aaa_tags_link');
+    $parts[$i] = $tag_link;
+  }
+  $top_tags = join(fill_template('aaa_tags_sep'), @parts);
+
+  # now do filtering if visitor wanted a particular tag
+  if(length($want)) {
+    # not safe to delete from hash while iterating over it, so
+    # need temp list of deletes
+    foreach (keys %blosxom::files) {
+      if(!exists($keeps{$_})) {
+        $dels{$_} = 1;
+      }
+    }
+    foreach (keys %dels) {
+      delete($blosxom::files{$_});
+    }
+  }
+    
+  1;
+}
+
+# the story() plugin method is called once per story entry. We will redefine
+# the $tags variable with every post, so that story rendering can then
+# have the proper tags available. story() gets called with a bunch of args.
+sub story {
+  my ($pkg, $path, $filename, $story_ref, $title_ref, $body_ref) = @_;
+
+  $tags = fill_template('aaa_no_tags');
+  my $use = "$path/$filename.$blosxom::file_extension";
+  my @parts;
+
+  foreach $this_tag (@{$map{"$use"}}) {
+    mktag_link('aaa_tag_link');
+    push(@parts, $tag_link);
+  }
+  $tags = join(fill_template('aaa_name_sep'), @parts);
+  1;
+}
+
+# from one global, sets a bunch of other globals, used in two places
+sub mktag_link {
+  my $t = shift;
+  $this_tagsafe = $this_tag;
+  $this_tagsafe =~ tr: :_:;
+  $this_link = "$blosxom::url?tag=$this_tagsafe";
+  $this_count = $alltags{$this_tag};
+  $tag_link = fill_template($t);
+}
+
+# Use actual (blosxom or plugin-override) template / interpolate methods
+sub fill_template {
+  my ($chunk) = @_;
+  my $tmpl = undef;
+
+  $tmpl = &$blosxom::template("$blosxom::datadir/$curr_path", $chunk, $blosxom::flavour);
+
+  # fallback to default
+  if ($tmpl eq '') {
+     $tmpl = $template{$blosxom::flavour}{$chunk};
+     # if that exists
+     $tmpl = '' if(!defined($tmpl));
+  }
+
+  $tmpl = &$blosxom::interpolate($tmpl);
+  return $tmpl;
+}
+
+1;
+__END__
+
+=head1 NAME
+
+Blosxom Plug-in: aaa_tags
+
+=head1 SYNOPSIS
+
+Searches the "other" list (non-blog entries) for C<foo.tags> files. 
+
+=head1 DESCRIPTION
+
+The C<.tags> (suffix configurable) files are read in looking for tags.
+Tag files which lack a matching story are discarded.
+Tags are one per line not starting with C<#>, and can be space,
+hyphen, or underscore separated. But spaces will be changed to
+underscores for URLs.
+
+The identified tags are associated with the matching
+C<foo.$file_extension> files. When C<foo.$file_extension> is processed, 
+C<$aaa_tags::tags> will be set to use in (and only in) the story template. 
+
+The C<$aaa_tags::top_tags> variable holds a configurable number of the
+most popular tags and is available in all templates. Here's the complete
+list of interpolatable variables:
+
+=over 4
+
+=item * $aaa_tags::tags
+
+Available in stories, and formatted according to the C<aaa_tag_link> template.
+
+=item * $aaa_tags::top_tags
+
+Available in anywhere, and formatted according to the C<aaa_tags_link> template.
+
+=item * $aaa_tags::tag_count
+
+Available in anywhere, this is the number of unique tags.
+
+=item * $aaa_tags::story_count
+
+Available in anywhere, this is the number of tagged stories.
+
+=item * $aaa_tags::this_tag
+
+Intended for use in templates used by C<aaa_tags> it has the display version
+of the current tag.
+
+=item * $aaa_tags::this_link
+
+Intended for use in templates used by C<aaa_tags> it has the URL to search for
+the current tag.
+
+=item * $aaa_tags::this_tagsafe
+
+Intended for use in templates used by C<aaa_tags> it has the URL-safe version
+of the current tag.
+
+=item * $aaa_tags::this_count
+
+Intended for use in templates used by C<aaa_tags> it has the count of stories
+using the current tag.
+
+=back
+
+
+=head1 VERSION
+
+2020-03-16
+
+=head1 AUTHOR
+
+Eli the Bearded <blossom@eli.users.panix.com>
+
+=head1 SEE ALSO
+
+Blosxom, http://www.blosxom.com/
+
+=head1 LICENSE
+
+Released under the same license as blosxom:
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+=cut
+
