@@ -77,17 +77,23 @@ Code { background-color: black; color: #94ed30;
        font-weight: bold; font-family: courier,monospace;
      }
 
+.ingredients { list-style: "\27A3"; }
+
 /* experiment with cellphone friendliness */
 @media (max-width: 800px) {
   .leftcol      { display: none; }
-  .topnav       { display: block; list-style: none; }
-  .mainblock    { padding: 3%; width: 94%; left: 0; }
-  .body         { font-size: 18px; }
-  .h2           { font-size: 24px; }
-  .h3           { font-size: 22px; }
+  nav           { display: block; }
+  .topnav       { display: block; }
+  ul.subcats    { display: inline; list-style: "\1F3F7"; list-style-position: inside; }
+  ul.subcats > li { float: left; }
+  .mainblock    { padding: 1vh 2vw; width: 96vw; left: 0; }
+  body         { font-size: 18px; }
+  h2           { font-size: 24px; clear: both; }
+  h3           { font-size: 22px; clear: both; }
   .dateheader   { font-size: 18px; }
   .pagetitle    { font-size: 24px; }
   .pageinfo     { font-size: 18px; }
+  .imgbox > img { width: 90vw; height: auto; }
 }
 
 
