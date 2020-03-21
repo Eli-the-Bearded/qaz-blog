@@ -4,6 +4,11 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/03/21/post-filter
+  * new mark-up language for my tastes and filter to implement it
+  * comments about new CSS
+  * comments about new logos and `randomlogo`
+
 https://qaz.wtf/qz/blosxom/2020/03/17/tags-plugin
   * aaa_tags plugin
 
