@@ -80,7 +80,7 @@ use warnings;
 my $imgpath = '/qz/img';
 
 # root directory for relative tags file path
-my $datadir = '.../eli/qz/data/';
+my $datadir = '/htdocs/userdirs/eli/qz/data/';
 
 # tags suffix (if none provided on .tf line)
 my $tagsuf = '.tags';
