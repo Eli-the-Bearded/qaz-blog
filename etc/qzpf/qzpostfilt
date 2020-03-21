@@ -1,0 +1,383 @@
+#!/usr/local/bin/perl-latest
+# A processor to assist in making blog posts.
+#
+# Takes no options, reads from stdin, writes to stdout.
+#
+#  The only invisible / automatic action is: if the first
+#  line does not start with . or < and is non-blank, it
+#  will be wrapped with <h3>...</h3>. 
+#
+#  The syntax borrows from both the style of *roff and from
+#  markdown. Common inline things like `code`, _italic_, and
+#  *bold* use in-line markdown-style syntax. Markdown style
+#  syntax does not cross line bondaries. So the "*roff" in
+#  the first line renders as-is, it doesn't create a bolded
+#  stretch to the word "*bold*".
+#
+#  Block level syntax use [nt]roff style commands, where in
+#  the examples [this] means "this" is an optional something.
+#
+#  .p		start a <p>aragraph
+#  .p TYPE	start a <p class=TYPE>
+#  ./p		end a paragraph
+#  .d		start a <div>
+#  .d TYPE	start a <div class=TYPE>
+#  ./d		end a </div>
+#  .ol [TYPE]	start an ordered list, with optional class
+#  ./ol		end an ordered list
+#  .ul [TYPE]	start an unordered list, with optional class
+#  ./ul		end an unordered list
+#  .dl [TYPE]	start an unordered list, with optional class
+#  ./dl		end an unordered list
+#   * 		(space asterisk space) start <li> (like markdown)
+#   /* 		(space slash asterisk space) end </li>
+#   .dt		(space asterisk space) start <dt>
+#   ./dt	(space slash asterisk space) end </dt>
+#   .dd		(space asterisk space) start <dd>
+#   ./dd	(space slash asterisk space) end </dd>
+#
+# In general, for block level commands, when the first thing on a line:
+#	.FOO			yeilds	<FOO>
+#	.FOO BAR		yeilds  <FOO class=BAR>
+#	.FOO BAR BAZ=QUX	yeilds  <FOO class=BAR BAZ=QUX>
+#	./FOO			yeilds	</FOO>
+#
+# Closing ./FOO tags will "eat" one newline before them. 
+#
+# Noteworthy exceptions (besides .d for div)
+#
+#   .a linkurl "link _text_ here" [foo=bar]
+#	yeilds
+#   <a href="linkurl" foo=bar>link <i>text</i> here</a>
+#	
+#   .i filename "alt text" [foo=bar]
+#	yeilds
+#   <img src="/qz/img/filename" alt="alt text" foo=bar
+#	
+#   .hr [TYPE]		yeilds	<hr class=TYPE />
+#   .br			yeilds	<br />
+#   .t TAG [TAG ...]	puts those tags in a tags file
+#                       tags can have spaces, "double quote" those
+#   .tf path/name	where to save those tags
+#
+# Regular html <tags> and &entities; are left alone, for complex
+# formatting. It is assumed the user is trusted. It's presumed that
+# for both regular typing and cellphone typing using .FOO is less
+# work to enter than <FOO>, so the short cuts will be useful. Also
+# you can ":set paragraphs=p\ hrbri\ d" and the the { and } paragraph
+# motions will work using .p, .hr, .br, .i, and .d as paragraph starts.
+# (The setting is a list of character *pairs* that follow a . in the
+# first column. Made tricky by " starting a comment in the settings.
+#
+# 19 March 2020
+
+use strict;
+use warnings;
+
+# config {
+
+# default directory for images (no final /)
+my $imgpath = '/qz/img';
+
+# root directory for relative tags file path
+my $datadir = '.../eli/qz/data/';
+
+# tags suffix (if none provided on .tf line)
+my $tagsuf = '.tags';
+
+# } end config
+
+my $tags = '';
+my $tagfile;
+
+
+while(<>) {
+  my $sol = "\n";
+
+  # we print a newline before text to output
+  # unless it is a "eat a newline" close tag
+  chomp;
+
+  # first line special
+  if ($. == 1) {
+    # if not starting with . or < and has content
+    if (! /^[.<]/ and /\S/) {
+      s%(.*)%<h3>$1</h3>%;
+      print;
+      next;
+    }
+
+    # fall-thru if those conditions not met
+    $sol = "";
+  }
+
+  # deal with a . line
+  if (s%\s*[.](/?\w+)%%) {
+    dotline($1, $_, $sol);
+    next;
+  }
+
+  # deal with <li> markers
+  s/^\s+\*\s/<li>/;
+  s%^\s+/\*(\s|$)%</li>%;
+
+  # deal with the line piecemeal
+  consume($_, $sol);
+  
+} # main while loop
+
+# final newline
+print "\n";
+
+dealwithtags();
+exit;
+
+
+sub dotline {
+  my $action = shift;
+  my $rest = shift;
+  my $nl = shift;
+  my $end = '>';
+
+  if ($action eq 'a') {
+    ahref($rest);
+    return;
+  }
+
+  if ($action eq 'i') {
+    image($rest);
+    return;
+  }
+
+  if ($action eq 't') {
+    tag($rest);
+    return;
+  }
+
+  if ($action eq 'tf') {
+    $tagfile = $rest;
+    $tagfile =~ s/^\s+//;
+    $tagfile =~ s/\s+$//;
+    return;
+  }
+
+  if ($action eq 'd' ) { $action = 'div'; }
+  if ($action eq '/d') { $action = '/div'; }
+
+  if ($action =~ m:^/:) {
+    print "<$action>";
+    return;
+  }
+
+  if ($action eq 'hr' or $action eq 'br') {
+    $end = ' />';
+  }
+
+  print "$nl<$action";
+  
+  if (s/\s+(\S+)//) {
+    print qq( class="$1");
+  }
+
+  if(/=/) {
+    print $_;
+  }
+  print $end;
+} # end &dotline
+
+
+sub consume {
+  my $l = shift;
+  my $nl = shift;
+  my $o = '';
+  my $safety = 100;
+  my $save = '';
+
+  while( length($l) ) {
+    # deal with leading </foo> eating newlines
+    if ( $o eq '' and $l =~ s%^\s*(</\S+)%% ) {
+      $o = $1;
+      $nl = "";
+      # line is likely empty now
+      next;
+    }
+
+    if ( $l =~ s%^(\s*<[^>]*>)%% ) {
+      $o .= $1;
+    }
+
+    if ( $l =~ s/^([^*_`]+)// ) {
+      $o .= $1;
+    }
+
+    # line is empty or starts with *, _, or ` now
+    if ( $l =~ s/^\*// ) {
+      if ($l =~ s%^([^*]+)\*%<b>$1</b>% ) {
+        1; # substitution worked!
+      } else {
+        $o .= '*';
+      }
+      next;
+    }
+
+    if ( $l =~ s/^_// ) {
+      if ($l =~ s%^([^_]+)_%<i>$1</i>% ) {
+        1; # substitution worked!
+      } else {
+        $o .= '_';
+      }
+      next;
+    }
+
+    if ( $l =~ s/^`// ) {
+      if ($l =~ s%^([^`]+)`%<code>$1</code>% ) {
+        1; # substitution worked!
+      } else {
+        $o .= '`';
+      }
+      next;
+    }
+
+    # break infinite loops
+    $safety --;
+    if($safety == 0) {
+      if ($save eq $l) {
+	warn "Save is: $save\n";
+        die "$0: forever loop in consume, line $.\n";
+      }
+      $save = $l;
+      $safety = 100;
+    }
+  } # consume loop
+
+  print "$nl$o";
+} # end &consume
+
+
+sub ahref {
+  my $rest = shift;
+  my $url;
+  my $text = '';
+
+  ($rest =~ s/\s*(\S+)//) or return;
+  $url = $1;
+
+  print qq(\n<a href="$url");
+  
+  if ($rest =~ s/\s+"([^"]*)"//) {
+    if (length($1)) {
+      $text = $1;
+    }
+  }
+  if (0 == length($text)) {
+    $text = $url;
+  }
+
+
+  if ($rest =~ /=/) {
+    print $rest;
+  }
+
+  print '>';
+  consume($text, '');
+  print '</a>';
+} # end &ahref
+
+
+sub image {
+  my $rest = shift;
+  my $img;
+
+  ($rest =~ s/\s*(\S+)//) or return;
+  $img = $1;
+
+  $img =~ s/^http:/https:/;
+
+  if ($img !~ m%^(?:https:)?/%) {
+    # not an absolute path, prefix
+    $img = "$imgpath/$img";
+  }
+
+  print qq(\n<img src="$img");
+  
+  if ($rest =~ s/\s+"([^"]*)"//) {
+    if (length($1)) {
+      print qq( alt="$1");
+    }
+  }
+
+  if ($rest =~ /=/) {
+    print $rest;
+  }
+
+  print ' />';
+} # end &image
+
+
+sub tag {
+  my $tl = shift;
+  my $safety = 100;
+  my $save = '';
+
+  while( length($tl) ) {
+    # eat initial whitespace
+    $tl =~ s/^\s+//;
+
+    # peel off an initial "double quoted" tag
+    if ($tl =~ s/^"([^"]*)"//) {
+      if (length($1)) { $tags .= "\n$1"; }
+    }
+
+    # peel off an initial non-quoted tag
+    if ($tl =~ s/^([^\s"]\S*)//) {
+      $tags .= "\n$1";
+    }
+
+    # deal with chance of non-matching quotes
+    if ($tl =~ s/^"([^"]*)$//) {
+      if (length($1)) { $tags .= "\n$1"; }
+    }
+
+    # break infinite loops
+    $safety --;
+    if($safety == 0) {
+      if ($save eq $tl) {
+        die "$0: forever loop in tags, line $.\n";
+      }
+      $save = $tl;
+      $safety = 100;
+    }
+  }
+} # end &tag
+
+
+sub dealwithtags {
+  # Have tags, can't save them? ERROR
+  if (length($tags) and !defined($tagfile)) {
+    die "$0: no where to save tags\n";
+  }
+  # No tags with or without somewhere to save them? No problem.
+  if (!defined($tagfile) or $tags eq '') {
+    return;
+  }
+
+  if ($tagfile !~ m:[.][^./]+$:) {
+    $tagfile = "$tagfile.$tagsuf";
+  }
+  if ($tagfile !~ m:^/:) {
+    $tagfile = "$datadir/$tagfile";
+  }
+
+  $tags .= "\n";
+  $tags =~ s/^\n+//;
+  $tags =~ s/\n+/\n/g;
+
+  my $tf;
+  if (!open($tf, '>', $tagfile)) {
+    die "$0: cannot save tags to $tagfile: $!\n";
+  }
+  print $tf $tags;
+  close $tf;
+} # end &dealwithtags
+
+__END__

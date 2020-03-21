@@ -1,0 +1,74 @@
+#!/bin/sh
+# A test helper for qzpostfilt.
+#
+# Takes an input file ($1), an expected output file ($2),
+# optional tag expected file ($3) and optional tag actual file ($4).
+# With those, runs qzpostfilt reading from the input file and
+# writing to a temp file, then compares input to output. If there is
+# a tag expected file, that is compared to tag actual. If qzpostfilt
+# exits with non-zero status, prints anything to stderr, or any of
+# the file comparisons are not 100% same content, this will exit with
+# non-zero status. The output, stderr, and tag actual files will be
+# cleaned up.
+
+useperl=${USE_PERL:-/usr/bin/perl}
+
+input="$1"
+expected="$2"
+tag_expected="$3"
+tag_actual="$4"
+output=test_out.$$.tmp
+stderr=test_err.$$.tmp
+
+$useperl qzpostfilt < "$input" > "$output" 2> "$stderr"
+rc=$?
+
+goodbye() {
+  rm -f "$output" "$stderr" "$tag_actual"
+  exit $1
+}
+
+if [ "$rc" != 0 ] ; then
+  echo >&2 "testhelper: on '$input' bad exit ($rc), stderr said: "
+  cat >&2 "$stderr"
+  goodbye 1
+fi
+
+# -s file exists with size greater than 0
+if [ -s "$stderr" ] ; then
+  echo >&2 "testhelper: on '$input' stderr output: "
+  cat >&2 "$stderr"
+  goodbye 1
+fi
+
+if cmp "$output" "$expected" ; then
+  : yay, worked
+else
+  echo >&2 "testhelper: on '$input' mismatched output"
+  echo >&2 "Wanted:"
+  cat >&2 "$expected"
+  echo >&2 "Got:"
+  cat >&2 "$output"
+  goodbye 1
+fi
+
+if [ -s "$tag_expected" ] ; then
+  if [ ! -s "$tag_actual" ] ; then
+    echo >&2 "testhelper: on '$input' missing tag output"
+    goodbye 1
+  fi
+
+  if cmp "$tag_expected" "$tag_actual" ; then
+    : yay, worked
+  else
+    echo >&2 "testhelper: on '$input' mismatched tag output"
+    echo >&2 "Wanted:"
+    cat >&2 "$tag_expected"
+    echo >&2 "Got:"
+    cat >&2 "$tag_actual"
+    goodbye 1
+  fi
+fi
+
+# everything worked
+goodbye 0

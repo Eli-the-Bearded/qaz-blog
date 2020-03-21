@@ -1,0 +1,566 @@
+#!/bin/sh
+# Make sure qzpostfilt actually works as described.
+
+# die on error
+set -e
+
+here=$(pwd)
+
+run_notags() {
+  sh testhelper $testname.in $testname.out
+  echo "$testname success"
+  rm -f $testname.in $testname.out
+}
+
+run_tags() {
+  sh testhelper $testname.in $testname.out $testname.texp $testname.tags
+  echo "$testname success"
+  rm -f $testname.in $testname.out $testname.texp $testname.tags
+}
+
+###################################################
+
+testname=h3-ify-first-line
+cat > $testname.in <<_INput
+This is a TITLE
+_INput
+cat > $testname.out <<_WAnted
+<h3>This is a TITLE</h3>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=dot-first-line
+cat > $testname.in <<_INput
+.p
+_INput
+cat > $testname.out <<_WAnted
+<p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=html-first-line
+cat > $testname.in <<_INput
+<h2>
+_INput
+cat > $testname.out <<_WAnted
+<h2>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=blank-first-line
+cat > $testname.in <<_INput
+
+nice
+_INput
+cat > $testname.out <<_WAnted
+
+nice
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-paragraph-1
+cat > $testname.in <<_INput
+Title
+<p>
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-paragraph-2
+cat > $testname.in <<_INput
+Title
+.p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-paragraph-3
+cat > $testname.in <<_INput
+Title
+.p
+./p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-paragraph-4
+cat > $testname.in <<_INput
+Title
+<p>
+</p>
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=classy-paragraph-1
+cat > $testname.in <<_INput
+Title
+.p classy
+./p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p class="classy"></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=classy-paragraph-2
+cat > $testname.in <<_INput
+Title
+.p classy foo=bar
+./p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p class="classy" foo=bar></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=classy-paragraph-3
+cat > $testname.in <<_INput
+Title
+<p class=classy foo=bar>
+</p>
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p class=classy foo=bar></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-div-1
+cat > $testname.in <<_INput
+Title
+.d
+./d
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<div></div>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-div-2
+cat > $testname.in <<_INput
+Title
+.d classy
+./d
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<div class="classy"></div>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=basic-div-3
+cat > $testname.in <<_INput
+Title
+.d classy
+Content
+./d
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<div class="classy">
+Content</div>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=list-1
+cat > $testname.in <<_INput
+Title
+.ol classy
+ * item a
+ /* 
+ * item b
+ /*
+./ol
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<ol class="classy">
+<li>item a</li>
+<li>item b</li></ol>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=list-2
+cat > $testname.in <<_INput
+Title
+.ul classy foo=bar
+ * item 1
+ /* 
+ * item 2
+ /*
+./ul
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<ul class="classy" foo=bar>
+<li>item 1</li>
+<li>item 2</li></ul>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=list-3
+cat > $testname.in <<_INput
+Title
+.dl
+.dt
+word
+./dt
+.dd
+definition
+./dd
+./dl
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<dl>
+<dt>
+word</dt>
+<dd>
+definition</dd></dl>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=hr
+cat > $testname.in <<_INput
+Title
+.hr
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<hr />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=br
+cat > $testname.in <<_INput
+Title
+.br
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<br />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=link-1
+cat > $testname.in <<_INput
+Title
+.a https://example.net/
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<a href="https://example.net/">https://example.net/</a>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=link-2
+cat > $testname.in <<_INput
+Title
+.a https://example.net/ "link _text_ here" class=link
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<a href="https://example.net/" class=link>link <i>text</i> here</a>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=img-1
+cat > $testname.in <<_INput
+Title
+.i image.png "alt text"
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<img src="/qz/img/image.png" alt="alt text" />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=img-2
+cat > $testname.in <<_INput
+Title
+.i /path/image.png "alt text" foo=bar
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<img src="/path/image.png" alt="alt text" foo=bar />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=img-3
+cat > $testname.in <<_INput
+Title
+.i http://site/image.png "alt text"
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<img src="https://site/image.png" alt="alt text" />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=tags-1
+cat > $testname.in <<_INput
+Title
+.t one two
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+_WAnted
+cat > $testname.texp <<_TAgs
+one
+two
+_TAgs
+run_tags
+
+
+###################################################
+
+testname=tags-2
+cat > $testname.in <<_INput
+Title
+.t one
+.t two
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+_WAnted
+cat > $testname.texp <<_TAgs
+one
+two
+_TAgs
+run_tags
+
+
+###################################################
+
+testname=tags-3
+cat > $testname.in <<_INput
+Title
+.t one two
+.t "three four"
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+_WAnted
+cat > $testname.texp <<_TAgs
+one
+two
+three four
+_TAgs
+run_tags
+
+
+###################################################
+
+testname=tags-4
+cat > $testname.in <<_INput
+Title
+.t one "say cheese" two
+.t "three four"
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+_WAnted
+cat > $testname.texp <<_TAgs
+one
+say cheese
+two
+three four
+_TAgs
+run_tags
+
+
+###################################################
+
+testname=bold-1
+cat > $testname.in <<_INput
+Title
+One *boldy* two
+*Also bold.*
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+One <b>boldy</b> two
+<b>Also bold.</b>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=bold-2
+cat > $testname.in <<_INput
+Title
+<b>All</b> *bold* *now* *ALL BOLD*
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<b>All</b> <b>bold</b> <b>now</b> <b>ALL BOLD</b>
+_WAnted
+run_notags
+
+
+###################################################
+
+# Note the \`code\` to disarm the `` from the shell.
+testname=multiple-inline
+cat > $testname.in <<_INput
+Title
+This has *bold* and _italic_ and \`code\` parts.
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+This has <b>bold</b> and <i>italic</i> and <code>code</code> parts.
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=full-on-blog-post
+cat > $testname.in <<_INput
+Dog Toys
+
+.t blog
+.p
+I don't know where it came from, but I do have _suspicions_, there
+was a new dog toy in the yard today.
+./p
+
+.d imgbox
+.i chews.png "chewey"
+.p
+So *green* and \`chewy\`.
+.t green "chew toy"
+./p
+./d
+
+.tf $here/$testname
+.p
+My dogs were only
+.a https://video.invalid/video.mp4 "briefly" class=vidlink
+interested.
+./p
+.tf $here/$testname.tags
+_INput
+cat > $testname.out <<_WAnted
+<h3>Dog Toys</h3>
+
+<p>
+I don't know where it came from, but I do have <i>suspicions</i>, there
+was a new dog toy in the yard today.</p>
+
+<div class="imgbox">
+<img src="/qz/img/chews.png" alt="chewey" />
+<p>
+So <b>green</b> and <code>chewy</code>.</p></div>
+
+<p>
+My dogs were only
+<a href="https://video.invalid/video.mp4" class=vidlink>briefly</a>
+interested.</p>
+_WAnted
+cat > $testname.texp <<_TAgs
+blog
+green
+chew toy
+_TAgs
+run_tags
+
+
+###################################################
+
+echo ""
+echo "Ran ALL tests and PASSED."
