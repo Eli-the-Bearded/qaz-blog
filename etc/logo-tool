@@ -1,0 +1,123 @@
+#!/bin/sh
+# usage:
+#	logo-tool outdir [font | zip] [font | zip] ...
+#
+# Creates logos in outdir for font or font in a zip.
+# outdir will be created if needed.
+#
+# 21 March 2020
+
+# autodir on error
+set -e
+
+# what we write
+logotype='QZ'
+
+# 900x900 field, 200 point font, placed 200 in from left
+# and (writing line) 400 down from top. That gives plenty
+# of room for fonts that extend out of a 200x200 square
+# per character.
+rawsize=900x900
+fontsize=200
+drawstart=+200+400
+
+# colors, note that beyond white/black the pnmcrop tool will
+# be rather picky
+bgcolor=white
+fgcolor=black
+
+# unzip tmp dir, created and deleted as needed
+tdir=zip_tmp_$$
+
+# temp files for image output, created and deleted as needed
+tfile_a=logotype$$a
+tfile_b=logotype$$b
+
+# suffix to extract from zips and to treat as fonts
+glob=.[oOtT][tT][fF]
+
+outdir="$1"
+shift
+mkdir -p "$outdir"
+
+do_a_font() {
+  font="$1"
+
+  fontnopath=${font##*/}
+  fontbase=${fontnopath%$glob}
+
+  if [ -f "$fontbase.png" ] ; then
+    echo "$fontbase already done (ttf/otf versions?) skipping..."
+    continue
+  fi
+
+  case "$file" in
+    *.[zZ][iI][pP]) echo "Starting $fontnopath (from $file)" ;;
+    *)              echo "Starting $fontnopath" ;;
+  esac
+
+  convert -size $rawsize \
+	  xc:$bgcolor -fill $fgcolor \
+	  -font "$font" -pointsize $fontsize \
+	  -annotate $drawstart "$logotype" \
+	  pgm:- > "$tfile_a"
+
+  if pnmcrop -$bgcolor "$tfile_a" > "$tfile_b" ; then
+    : worked
+  else
+    echo "Yeah, not such a great font."
+    rm -f "$tfile_a" "$tfile_b"
+    continue
+  fi
+
+  pnmscale -ysize 100 "$tfile_b" | 
+  pnmquant 8 |
+  pnmtopng -compress 9 -transparent =$bgcolor > "$outdir/$fontbase.png"
+
+  rm -f "$tfile_a" "$tfile_b"
+
+  # sample identify output:
+  # Ginga-r09p.png PNG 197x100 197x100+0+0 16-bit RGB 11.8KB 0.000u 0:00.000
+  identify "$outdir/$fontbase.png" | 
+     perl -wne 'm/^(\w.+)\.png PNG (\d+)x(\d+)/ or die;
+                $f = $1; $w = $2; $h = $3;
+		$o = "$f.png"; 
+		# sanitize filenames
+		$f =~ tr:/A-Za-z0-9._-:_:cs;
+		$f =~ s/-([wh]\d)/_$1/g;
+		$n = "$f-h$h-w$w.png";
+		rename("$o", "$n") or die;'
+
+  ls -l "$outdir/"$fontbase*.png || /bin/true "allow to fail"
+  echo
+} # do a font
+
+deal_with_zip() {
+  zip="$1"
+  rm -rf $tdir
+  mkdir $tdir
+
+  # use -j to junk subdirectories, -qq for extra quiet
+  # use the glob to restrict what gets extracted, and
+  # extract everything into the temp dir
+  unzip -j -qq "$zip" "*$glob" -d $tdir
+  # ensure good permissions on files
+  chmod 644 $tdir/*
+
+  for each in $tdir/* ; do 
+    do_a_font "$each"
+  done
+
+  rm -rf $tdir
+}
+
+
+for file ; do 
+  
+  case "$file" in
+    *.[zZ][iI][pP]) deal_with_zip "$file" ;;
+    *$glob)         do_a_font     "$file" ;;
+    *) echo "What is $file? Skipping..."  ;;
+  esac
+
+done

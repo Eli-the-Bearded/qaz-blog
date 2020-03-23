@@ -1,0 +1,100 @@
+#!/bin/ksh
+# from man feh:
+#     -A, --action ACTION
+#        Specify  a  string  as  an  action  to  perform  on  the image. In
+#        slideshow or multiwindow modes, the action will be  run  when  the
+#        enter  key  is  pressed,  in list mode, the action will be run for
+#        each file listed. The action will be executed by /bin/sh. Use for-
+#        mat  specifiers  to refer to image info. See FORMAT SPECIFIERS for
+#        examples
+#        Eg. feh -A "mv %f ~/images/%n" *
+#     --action1...9
+#        Extra  actions which can be set and triggered using the appropriate
+#        number key.
+#
+#
+# Make a feh theme, put in fehrc:
+#   pickuploads -A "fehcopy -d /var/tmp/upload %f"
+# Then use with "feh -T pickuploads" or "ln -s `which feh` ~/bin/pickuploads"
+#
+# Make a complex feh theme, put in fehrc (all on one line):
+#   imgsort --action1 "fehcopy -d /var/tmp/sort1 %f"
+#           --action2 "fehcopy -d /var/tmp/sort2 %f"
+#           --action3 "fehcopy -d /var/tmp/sort3 %f"
+#           --action4 "fehcopy -d /var/tmp/sort4 %f"
+#           --action5 "fehcopy -d /var/tmp/sort5 %f"
+#           --action6 "fehcopy -d /var/tmp/sort6 %f"
+#           --action7 "fehcopy -d /var/tmp/sort7 %f"
+#           --action8 "fehcopy -d /var/tmp/sort8 %f"
+#           --action9 "fehcopy -d /var/tmp/sort9 %f"
+#   
+# 30 March 2011
+
+outdir=/var/tmp/feh
+# these booleans are "empty" is false, "not-empty" is true
+overwrite=
+quiet=
+copy=cp
+
+vars=1
+while [ $vars = 1 ] ; do
+  case "X$1" in
+    X-d) shift; outdir="$1"; shift ;;
+    X-q) shift; quiet=1 ;;
+    X-m) shift; copy=mv ;;
+    X-o) shift; overwrite=1 ;;
+    X-h|X--help) echo "$0: usage:"
+                 echo " fehcopy [ OPTIONS ] file"
+                 echo "Options:"
+                 echo "  -d DIR    copy to directory DIR"
+                 echo "            (default is $outdir)"
+                 echo "  -m        move, instead of copy"
+                 echo "  -o        overwrite any existing file"
+                 echo "            (default is uniquely name files)"
+                 echo "  -q        quiet operation"
+		 echo ""
+		 echo " Use as action to feh, eg:"
+		 echo "  feh -A 'fehcopy $f'"
+		 echo "In feh <enter> will trigger action."
+		 exit 2
+		 ;;
+    X-*) echo "$0: unknown option: $1"
+         exit 1 ;;
+    X?*) vars=0 ;;
+    X) echo "$0: no file specified!"
+       exit 1 ;;
+  esac
+done
+
+mkdir -p "$outdir"
+infile="$1"
+
+dirin=${infile%/*}
+basein=${infile##*/}
+
+uniq=
+
+if [ X"$overwrite" = X ] ; then
+  # there is a race condition here, but I don't think it is likely
+  # to every be encountered
+  while [ -f "$outdir/$uniq$basein" ] ; do
+    if [ "X$uniq" = X ] ; then
+      n=1
+      uniq="$n-"
+    else
+      n=$(( $n + 1 ))
+      uniq="$n-"
+    fi
+  done
+fi
+
+
+if [ X"$quiet" = X ] ; then
+  echo $copy "$infile" "$outdir/$uniq$basein"
+fi
+$copy "$infile" "$outdir/$uniq$basein"
+exit $?
+
+fehselect --cycle-once --scale-down -A "fehcopy -d /var/tmp/upload %f"
+imgsort --cycle-once --scale-down --action1 "fehcopy -d /var/tmp/sort1 %f" --action2 "fehcopy -d /var/tmp/sort2 %f" --action3 "fehcopy -d /var/tmp/sort3 %f" --action4 "fehcopy -d /var/tmp/sort4 %f" --action5 "fehcopy -d /var/tmp/sort5 %f" --action6 "fehcopy -d /var/tmp/sort6 %f" --action7 "fehcopy -d /var/tmp/sort7 %f" --action8 "fehcopy -d /var/tmp/sort8 %f" --action9 "fehcopy -d /var/tmp/sort9 %f" 
+
