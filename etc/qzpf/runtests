@@ -5,16 +5,19 @@
 set -e
 
 here=$(pwd)
+test=0
 
 run_notags() {
+  test=$(expr $test + 1)
   sh testhelper $testname.in $testname.out
-  echo "$testname success"
+  echo "test $test: $testname success"
   rm -f $testname.in $testname.out
 }
 
 run_tags() {
+  test=$(expr $test + 1)
   sh testhelper $testname.in $testname.out $testname.texp $testname.tags
-  echo "$testname success"
+  echo "test $test: $testname success"
   rm -f $testname.in $testname.out $testname.texp $testname.tags
 }
 
@@ -509,7 +512,7 @@ run_notags
 
 ###################################################
 
-testname=full-on-blog-post
+testname=simple-blog-post
 cat > $testname.in <<_INput
 Dog Toys
 
@@ -559,6 +562,10 @@ chew toy
 _TAgs
 run_tags
 
+testname=hard-blog-post
+cp post-filter.raw $testname.in
+cp post-filter.txt $testname.out
+run_notags
 
 ###################################################
 

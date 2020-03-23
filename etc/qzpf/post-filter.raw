@@ -1,0 +1,71 @@
+Post Filter
+
+.p
+So I started working on a method to compose posts _better_, for my idea
+of better at least. Version one of `qzpostfilt` (and a README and some
+test code) is available in the
+.a https://github.com/eli-the-bearded/qaz-blog "git repo"
+and browsable
+.a /qz/etc/qzpf/ "here."
+./p
+
+.p
+It's a mis-mash of Markdown and `nroff`/`troff` style commands. I picked
+what I thought the easiest to remember _and_ to type on a phone keyboard
+methods of composing my posts would be. Basically you have markdown
+style inline formatting for *bold*, _italic_, `code` and *roff style
+formatting for more block level stuff. As a general rule: `.foo` creates
+`&lt;foo>` and you need to explicitly close your `./foo`.
+./p
+
+.d imgbox
+.i /qz/img/xterm-screenshot.png "my xterm composing this post"
+.p
+It ends up looking more like *roff than markdown.
+./p
+./d
+
+.p
+I see this as the first step towards a composing tool. I'll also need a
+CGI wrapper for phone use and a command line wrapper to help with tags.
+As of today, it's more of a `:% !qzpostfilt` in `vi` sort of thing.
+./p
+
+.p
+Also in blosxom blog news, I've changed the html flavor templates slightly
+and made changes to the
+.a /qz/css/main.css "CSS file"
+mostly to better support reading on small screens, but also for a `&lt;ul>`
+class to use in 
+.a /qz/?tag=recipe "recipe posts."
+./p
+
+.p
+Lastly, I added another two dozen logos to the mix. Previously there had been 146, so
+it's up to 170 now. I don't recall how I created the first logos, this time my method
+was to type "QZ" in libreoffice, change the font size to 180, and then go through
+the fonts I have installed, screenshotting all the interesting ones. I next very roughly
+cropped the images so that each QZ was alone on a white background. From there I
+started scripting the work.
+./p
+
+<pre>
+# for every png file, convert to ppm (RGB color), auto-crop a white border,
+# convert to pgm (grayscale), rescale so ysize (height) is 100 pixels,
+# convert to png making white (and only exactly white) transparent, saving
+# that result in the "new" directory
+for f in *png ; do pngtoppm $f | pnmcrop -white | ppmtopgm | 
+   pnmscale -ysize 100 | pnmtopng -transparent =white > new/$f ; done
+</pre>
+
+.p
+(That's something I need to add to `qzpostfilt`: a
+`&lt;pre>` handler. Todo. Hand fix for now.)
+./p
+
+.p
+A second, messier, pass with `identify` got me the files renamed
+to look like "linux-biolinum-keys-h100-w205.png" instead of
+"linux-biolinum-keys.png". My `randomlogo` plugin uses the height
+and width information when available.
+./p

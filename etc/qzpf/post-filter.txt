@@ -1,0 +1,61 @@
+<h3>Post Filter</h3>
+
+<p>
+So I started working on a method to compose posts <i>better</i>, for my idea
+of better at least. Version one of <code>qzpostfilt</code> (and a README and some
+test code) is available in the
+<a href="https://github.com/eli-the-bearded/qaz-blog">git repo</a>
+and browsable
+<a href="/qz/etc/qzpf/">here</a>.</p>
+
+<p>
+It's a mis-mash of Markdown and <code>nroff</code>/<code>troff</code> style commands. I picked
+what I thought the easiest to remember <i>and</i> to type on a phone keyboard
+methods of composing my posts would be. Basically you have markdown
+style inline formatting for <b>bold</b>, <i>italic</i>, <code>code</code> and *roff style
+formatting for more block level stuff. As a general rule: <code>.foo</code> creates
+<code>&lt;foo></code> and you need to explicitly close your <code>./foo</code>.</p>
+
+<div class="imgbox">
+<img src="/qz/img/xterm-screenshot.png" alt="my xterm composing this post" />
+<p>
+It ends up looking more like *roff than markdown.</p></div>
+
+<p>
+I see this as the first step towards a composing tool. I'll also need a
+CGI wrapper for phone use and a command line wrapper to help with tags.
+As of today, it's more of a <code>:% !qzpostfilt</code> in <code>vi</code> sort of thing.</p>
+
+<p>
+Also in blosxom blog news, I've changed the html flavor templates slightly
+and made changes to the
+<a href="/qz/css/main.css">CSS file</a>
+mostly to better support reading on small screens, but also for a <code>&lt;ul></code>
+class to use in 
+<a href="/qz/?tag=recipe">recipe posts</a>.</p>
+
+<p>
+Lastly, I added another two dozen logos to the mix. Previously there had been 146, so
+it's up to 170 now. I don't recall how I created the first logos, this time my method
+was to type "QZ" in libreoffice, change the font size to 180, and then go through
+the fonts I have installed, screenshotting all the interesting ones. I next very roughly
+cropped the images so that each QZ was alone on a white background. From there I
+started scripting the work.</p>
+
+<pre>
+# for every png file, convert to ppm (RGB color), auto-crop a white border,
+# convert to pgm (grayscale), rescale so ysize (height) is 100 pixels,
+# convert to png making white (and only exactly white) transparent, saving
+# that result in the "new" directory
+for f in *png ; do pngtoppm $f | pnmcrop -white | ppmtopgm | 
+   pnmscale -ysize 100 | pnmtopng -transparent =white > new/$f ; done</pre>
+
+<p>
+(That's something I need to add to <code>qzpostfilt</code>: a
+<code>&lt;pre></code> handler. Todo. Hand fix for now.)</p>
+
+<p>
+A second, messier, pass with <code>identify</code> got me the files renamed
+to look like "linux-biolinum-keys-h100-w205.png" instead of
+"linux-biolinum-keys.png". My <code>randomlogo</code> plugin uses the height
+and width information when available.</p>

@@ -46,9 +46,10 @@
 #
 # Noteworthy exceptions (besides .d for div)
 #
-#   .a linkurl "link _text_ here" [foo=bar]
+#   .a linkurl "link _text_ here." [foo=bar]
 #	yeilds
-#   <a href="linkurl" foo=bar>link <i>text</i> here</a>
+#   <a href="linkurl" foo=bar>link <i>text</i> here</a>.
+#      (trailing punctuation moved outside automatically)
 #	
 #   .i filename "alt text" [foo=bar]
 #	yeilds
@@ -59,6 +60,10 @@
 #   .t TAG [TAG ...]	puts those tags in a tags file
 #                       tags can have spaces, "double quote" those
 #   .tf path/name	where to save those tags
+#
+# After a <pre>, .pre or ``` at the start of a line, input is copied
+# to output until seeing a start-of-line </pre>, ./pre, or ```. The
+# start .pre or ``` line can have a class name.
 #
 # Regular html <tags> and &entities; are left alone, for complex
 # formatting. It is assumed the user is trusted. It's presumed that
@@ -89,10 +94,15 @@ my $tagsuf = '.tags';
 
 my $tags = '';
 my $tagfile;
-
+my $in_pre = 0;
 
 while(<>) {
   my $sol = "\n";
+
+  if ($in_pre) {
+    preblock('in', $_);
+    next;
+  }
 
   # we print a newline before text to output
   # unless it is a "eat a newline" close tag
@@ -112,8 +122,19 @@ while(<>) {
   }
 
   # deal with a . line
-  if (s%\s*[.](/?\w+)%%) {
-    dotline($1, $_, $sol);
+  if (s%^\s*[.](/?\w+)%%) {
+    my $action = $1;
+    if (lc($action) eq 'pre') {
+      preblock('start', $_);
+    } else {
+      dotline($1, $_, $sol);
+    }
+    next;
+  }
+
+  # deal with a ``` line
+  if (s%^```%%) {
+    preblock('start', $_);
     next;
   }
 
@@ -254,10 +275,41 @@ sub consume {
 } # end &consume
 
 
+sub preblock {
+  my $where = shift;
+  my $rest  = shift;
+
+  # maybe use line numbers someday
+  $in_pre ++;
+
+  if ($where eq 'start') {
+    if ($rest =~ s/^\s*(\w[-\w]+)//) {
+      print qq(<pre class="$1">\n);
+    } else {
+      print "<pre>\n";
+    }
+    return;
+  }
+
+  if ($rest =~ s%^(?:[.<]/pre>?|```)%%i) {
+    $in_pre = 0;
+    print '</pre>';
+    if ($rest =~ /\S/) {
+      consume($rest);
+    }
+    return;
+  }
+
+  print $rest;
+
+} # end &preblock
+
+
 sub ahref {
   my $rest = shift;
   my $url;
   my $text = '';
+  my $post = '';
 
   ($rest =~ s/\s*(\S+)//) or return;
   $url = $1;
@@ -267,6 +319,10 @@ sub ahref {
   if ($rest =~ s/\s+"([^"]*)"//) {
     if (length($1)) {
       $text = $1;
+      # move final punctuation of "link text." outside: <a ...>link text</a>.
+      if ($text =~ s/(\w)([.,;:!?])$/$1/) {
+        $post = $2;
+      }
     }
   }
   if (0 == length($text)) {
@@ -280,7 +336,7 @@ sub ahref {
 
   print '>';
   consume($text, '');
-  print '</a>';
+  print "</a>$post";
 } # end &ahref
 
 
