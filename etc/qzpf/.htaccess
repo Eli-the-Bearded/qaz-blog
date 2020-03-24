@@ -1,0 +1,8 @@
+# properly .md *is* a markdown document, but as text/plain browser will
+# display it instead of only offering to download it
+#AddType text/markdown .md
+AddType text/plain .md .raw
+
+# README.* is on the default IndexIgnore list
+IndexIgnoreReset ON
+IndexIgnore .??*
