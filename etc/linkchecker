@@ -1,0 +1,44 @@
+#!/bin/sh
+
+savefile=$PHTML/qz/etc/FIX-DATES
+
+lcheck() {
+  file="$1"
+  tags=${file%.txt}.tags
+
+  if grep -q ^dead $tags ; then 
+    echo "$file: already known dead, skipping"
+    return
+  fi
+
+  # basically the "link checker" suggested flags from the wget man
+  # page, but I scale the retries attempts from 20 to 2.
+  if wget --tries=2 --spider --force-html -i "$file" ; then
+    : still alive
+  else
+    echo deadlink >> $tags
+  fi 
+
+  # get the timestamp fix command from SAVE-DATES's save file
+  fix=$(grep "$file" $savefile)
+
+  # many old files are mode 444
+  chmod 644 "$file"
+  # most old files have very standard formatting with a single
+  # link as:
+  #   <p><a href='http://example.url/'>Link</a></p>
+  # we will rewrite those
+  perl -i -wpe 's,<a href=.(http.*).>Link</a>,dead link: $1,;' "$file"
+  chmod 444 "$file"
+
+  # restore dates
+  $fix
+}
+
+for arg ; do
+  case "$arg" in 
+     *.txt) lcheck "$arg" ;;
+     *) echo "Skipping $arg" ;;
+  esac
+done
+
