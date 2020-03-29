@@ -1,0 +1,185 @@
+#!/usr/local/bin/perl-latest
+# Converts hastily edited usenet posts into qzpostfilt input source.
+#
+# The hasty edits expected:
+#	Headers are dropped to just Date: and Subject:
+#	Date: appears ***BEFORE*** Subject:
+#	multiple posts per file is fine, but separate with blank lines
+#
+# Output is a shell script with posts in here-docs. The script needs
+# to be edited to add filenames, flesh out tags, and check for
+# non-trivial markup changes (eg, blockquote) or content changes (eg
+# inproved titles). On STDERR expect warnings for markdown style tags
+# that cross line boundaries, a no-no for qzpostfilt.
+#
+# Input lines before the first Date: header are just copied to output
+# to allow other bits of shell script to be included.
+#
+# 28 Mar 2020
+use strict;
+use warnings;
+
+# configuration: what to tag everything
+my $tagall = 'review';
+
+# state machine state
+my $state = 'search';
+
+# set by state machine
+my $year;
+my $date;
+my $npara = '';
+
+sub dateparse {
+  my $org = shift;
+  $_ = $org;
+  chomp $org;
+
+  # zero pad, eg "Date: Thu,  1 Apr 2010" to "Date: Thu, 01 Apr 2010"
+  s/^(Date: [A-Z][a-z][a-z],)  /$1 0/;
+
+  # month to number
+  s/ Jan / 01 /;
+  s/ Feb / 02 /;
+  s/ Mar / 03 /;
+  s/ Apr / 04 /;
+  s/ May / 05 /;
+  s/ Jun / 06 /;
+  s/ Jul / 07 /;
+  s/ Aug / 08 /;
+  s/ Sep / 09 /;
+  s/ Oct / 10 /;
+  s/ Nov / 11 /;
+  s/ Dec / 12 /;
+
+  # the big transform
+  s/^Date: [A-Z][a-z][a-z], ([0123][0-9]) ([01][0-9]) ([12][0-9][9012][0-9]) ([012][0-9]):([0-6][0-9]):([0-6][0-9]) .*/touch -t $3$2$1$4$5.$6 \$THISFILE.* ; orig="$org"/
+  	or die "$0: line $., failed to parse $_\n";
+
+  # save the year for tagging
+  $year = $3;
+
+  return $_;
+} # &dateparse()
+
+
+sub startpost() {
+  $npara = '';
+  print "\n";
+  print "THISFILE=\$--WHAT\n";
+  print "qzpostfilt <<__END_ofpost > \$THISFILE.txt\n";
+} # &startpost() 
+
+
+sub endpost() {
+  print "__END_ofpost\n";
+  print "$date\n";
+  print "\n\n";
+} # &endpost() 
+
+
+sub printit {
+  $_ = shift; 
+  my $c;
+
+  if( /^Elijah$/ ) { return; }
+  if( /^------$/ ) { print "Final thought: "; return; }
+
+  if(/^\s*http/) {
+    chomp;
+    my $at = '';
+    if(/imdb.com/i)    { $at = 'at IMDB'; }
+    if(/youtube.com/i) { $at = 'on Youtube'; }
+    print qq(.a $_ "$at"\n);
+    return;
+  }
+
+  s/&/&amp;/g;
+  s/(^|\s)--(\s|$)/$1 &mdash; $2/g;
+
+  $c = (tr:_:_:);
+  if($c % 2) {
+    print STDERR "line $. Odd number of underscores.\n";
+  }
+
+  $c = (tr:*:*:);
+  if($c % 2) {
+    # eg, markdown-esque bulletted lists
+    if(!($c == 1 and /^\s+\*\s/)) {
+      print STDERR "line $. Odd number of asterisks.\n";
+    }
+  }
+
+  $c = (tr:`:`:);
+  if($c % 2) {
+    print STDERR "line $. Odd number of backticks.\n";
+  }
+
+  print;
+} # &printit
+
+while(<>) {
+  if($state eq 'search' or $state eq 'blank') {
+    # search: waiting for first ^Date:
+    # blank: previous input was blank, might be starting a new piece
+    if(/^Date:/) {
+      $date = dateparse($_);
+      if($state eq 'blank') {
+        endpost();
+	startpost();
+      } else {
+	startpost();
+      }
+      $state = 'h3';
+      next;
+    } 
+    if ($state eq 'search') {
+      print;
+      next;
+    } else {
+      if(/^\s*$/) { print "\n"; next; }
+      $state = 'paragraph';
+      print $npara;
+      # fall-thru with new state and $_
+    }
+  }
+
+  if($state eq 'h3') {
+    next if /^\s+$/;
+    s/^Subject: (Re: )?//;
+    if(s:_([^_]+)_:<i>$1</i>:g) {
+      chomp;
+      print "<h3>$_</h3>\n";
+    } else {
+      print;
+    }
+    print ".tf \$THISFILE.tags\n";
+    print ".t $year $tagall\n";
+    $state = 'article';
+    next;
+  }
+
+  if($state eq 'article') {
+    if(/\S/) {
+      print ".p\n";
+      printit($_);
+      $state = 'paragraph';
+    }
+    next;
+  }
+
+  if($state eq 'paragraph') {
+    if (/\S/) {
+      printit($_);
+      next;
+    }
+    print "./p\n\n";
+    $npara = ".p\n";
+    $state = 'blank';
+    next;
+  }
+
+  print "$0: line $.: state is $state, unexpected end of loop\n";
+} # main while() loop
+
+endpost();
