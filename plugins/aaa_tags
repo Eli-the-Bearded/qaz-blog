@@ -1,10 +1,15 @@
 # Blosxom Plugin: aaa_tags
 # Author(s): Eli the Bearded <blossom@eli.users.panix.com>
-# Version: 2020-03-13
+# Version: 2020-04-08
 # Documentation: See the bottom of this file or type: perldoc aaa_tags
 
 package aaa_tags;
-use CGI qw/:standard/;
+
+# if your perl is too old and/or you don't want/need UTF-8 tags,
+# you can remove the utf8 bits from the next two lines and pick
+# a suitable value for $cc in config below.
+use CGI qw/:standard -utf8/;
+use open qw(:std :utf8);
 
 # --- Configurable variables -----
 
@@ -12,6 +17,20 @@ use CGI qw/:standard/;
 # with "#" are ignored, leading / trailing whitespace stripped,
 # internal whitespace normalized to single space.
 my $tgext = 'tags';
+ 
+# A regexp to match a single character in a tag.
+# for ASCII only tags you may want:
+#   my $cc = qr/[\w-]/;
+# The above is compatible with the original version of this plugin.
+#
+# For a more extended set of ASCII maybe:
+#   my $cc = qr'[-!$%&()*+./:;<>=?@\[\\\]_{}0-9A-Za-z]';
+# which takes most printable ASCII but leaves out , ^ | and ~ operators
+#
+# This is the original ASCII plus all of Unicode high bit after
+# U+00A0 non-breaking space
+my $cc = qr/[-_0-9A-Za-z\x{A1}-\x{FFFFFF}]/;
+
 
 # template{flavour}{template_name}; all {template_name}s can also be
 # flavour files in the regular location(s).
@@ -38,11 +57,36 @@ my %template = (
 
            # just like aaa_tag_link, but used in $aaa_tags::top_tags
 	   aaa_tags_link => '<a href="$aaa_tags::this_link">$aaa_tags::this_tag</a>: $aaa_tags::this_count',
+
+	   # used when a tag filter has removed all posts from the blog
+	   aaa_nothing_left => <<'AAA_NOTHING'
+<div class=aaa_error>
+<h3>Tag search found nothing</h3>
+<p>
+Out of $aaa_tags::story_count tagged stories, nothing matched the search for
+<b class=aaa_search>$aaa_tags::this_search_terse</b>.
+</p>
+<p class=aaa_search>That search was interpreted as:<br />
+$aaa_tags::this_search_verbose
+</p>
+$aaa_tags::this_search_table
+<p class=aaa_search>All tags with more than <b>$aaa_tags::threshold</b> uses.</p>
+<ul class=aaa_search>
+<li>$aaa_tags::frequent_tags</li>
+</ul>
+</div>
+AAA_NOTHING
+
          },
 );
 
 # how many tags to show in $top_tags
-my $top_count = 20;
+# (this variable can be used in templates)
+$top_count = 20;
+
+# when set, minimum number of tag usage before appearing in $frequent_tags
+# (this variable can be used in templates)
+$threshold = 3;
 
 # --- end configurable variables -
 # --------------------------------
@@ -51,7 +95,9 @@ my $top_count = 20;
 
 # any templates
 $top_tags = '';
+$frequent_tags = '';
 $tag_count = $story_count = 0;
+$this_search_terse = '';
 
 # only story template
 $tags = '';
@@ -59,6 +105,10 @@ $this_count = '';
 $this_tag = '';
 $this_tagsafe = '';
 $this_link = '';
+
+# error template and vars
+$this_search_verbose = '';
+$this_search_table = '';
 
 # --- end template variables -----
 # --------------------------------
@@ -68,12 +118,56 @@ our %map;
 # tag to number of matches
 our %alltags;
 our $want;
+our @want_and;
+our @want_or;
+our @want_not;
+our %want_ALL;
+
+# created and deleted as a placeholder to fool blosxom into thinking
+# there is an article; but only used when tag filtering removes all
+# posts
+our $errorpage = "$blosxom::plugin_state_dir/aaa-error.$$";
 
 sub start {
   # look for a tag query
-  ($want) = (param("tag") =~ /^(\w[\w-]*\w?)$/); $want ||= '';
-  $want =~ tr:_: :;
-  $want = lc($want);
+  my @tags = multi_param("tag");
+
+  for my $param (@tags) {
+    for (split(',', $param)) {
+      s/\s+//g;
+      ($want) = (/^([~]?${cc}(?:${cc}+|[|^~-]${cc}+)*)$/);
+      $want ||= '';
+      $want =~ tr:_: :;
+      $want = lc($want);
+      if ($want =~ /\|/) {
+        for my $t (split(/\|/, $want)) {
+	  if ($t =~ s/^[~]//) {
+	    push(@want_not, $t);
+	  } else {
+	    push(@want_or, $t);
+	  }
+	}
+      } elsif ($want =~ /\^/) {
+        for my $t (split(/\^/, $want)) {
+	  if ($t =~ s/^[~]//) {
+	    push(@want_not, $t);
+	  } else {
+	    push(@want_and, $t);
+	  }
+	}
+      } else {
+	if ($want =~ s/^[~]//) {
+	  push(@want_not, $want);
+	} else {
+	  push(@want_or, $want);
+	}
+      }
+    }
+  }
+  for (@want_or, @want_and, @want_not) {
+    $want_ALL{$_} = 0;
+  }
+
   1;
 }
 
@@ -95,6 +189,9 @@ sub filter {
         next;
       }
 
+      my $all = -3 - (keys %want_ALL);
+      my $and = @want_and + 0;
+
       # keeping $story as is would be handy for filtering,
       # but it's less useful that way for finding tags during
       # article display
@@ -112,17 +209,38 @@ sub filter {
 	  push (@tl, $_);
 	  $alltags{$_} ++;
 	  if (length($want)) {
-	    # we know to keep something if any single tag it has
-	    # is wanted, we won't know what to delete until all
-	    # tags are checked for a story
-	    if ($_ eq $want) {
-	      $keeps{"$blosxom::datadir$story"} = 1;
+	    # $want itself is only a flag that some tag is wanted
+	    # the @want_and and @want_or have the exact lists.
+	    for $want (@want_or) {
+	      if ($_ eq $want) {
+		$keeps{"$blosxom::datadir$story"} += $and + 1;
+	      }
+	    }
+	    for $want (@want_and) {
+	      if ($_ eq $want) {
+		$keeps{"$blosxom::datadir$story"} ++;
+	      }
+	    }
+	    for $want (@want_not) {
+	      if ($_ eq $want) {
+		$keeps{"$blosxom::datadir$story"} = $all;
+	      }
+	    }
+	    if(exists($want_ALL{$_})) {
+	      $want_ALL{$_} ++;
 	    }
 	  }
 	}
 	$story_count ++;
         $map{$story} = \@tl;
       } # if open "other" file
+
+      if($and and defined($keeps{"$blosxom::datadir$story"}) and
+         $keeps{"$blosxom::datadir$story"} < $and) {
+        # not enough anded tags
+	$keeps{"$blosxom::datadir$story"} = undef;
+      }
+
     }
   } # for others
 
@@ -133,40 +251,135 @@ sub filter {
 	           } (keys %alltags)) {
     $tag_count ++;
     next if $tag_count > $top_count;
-    push(@parts, $t);
+    $this_tag = $t;
+    mktag_link('aaa_tags_link');
+    push(@parts, $tag_link);
   }
 
-  for(my $i = 0; $i < @parts; $i ++) {
-    $this_tag = $parts[$i];
-    mktag_link('aaa_tags_link');
-    $parts[$i] = $tag_link;
-  }
+# for(my $i = 0; $i < @parts; $i ++) {
+#   $this_tag = $parts[$i];
+#   mktag_link('aaa_tags_link');
+#   $parts[$i] = $tag_link;
+# }
   $top_tags = join(fill_template('aaa_tags_sep'), @parts);
+
+  undef(@parts);
+  # build frequent tags tags
+  if(defined($threshold) and $threshold > 0) {
+    for my $t (sort {  # reg alpha sort, now with rev numerical sort for ties
+			($a cmp $b) ||
+			( $alltags{$b} <=> $alltags{$a} )
+		     } (keys %alltags)) {
+      next if $threshold > $alltags{$t};
+      $this_tag = $t;
+      mktag_link('aaa_tags_link');
+      push(@parts, $tag_link);
+    }
+    $frequent_tags = join(fill_template('aaa_tags_sep'), @parts);
+    undef(@parts);
+  }
 
   # now do filtering if visitor wanted a particular tag
   if(length($want)) {
+    my $wnter = '';
+    for my $not (@want_not) {
+      $wnter .= "~$not";
+    }
+    # this is just the value to stuff into tag=
+    $this_search_terse = join(',', join('^', @want_and), 
+                                   join('|', @want_or),
+                                   $wnter
+			     );
+    $this_search_terse =~ s/^\s*,\s*//g;
+    $this_search_terse =~ s/\s*,\s*$//g;
+
     # not safe to delete from hash while iterating over it, so
     # need temp list of deletes
     foreach (keys %blosxom::files) {
-      if(!exists($keeps{$_})) {
+      if(!exists($keeps{$_}) or !defined($keeps{$_}) or $keeps{$_} < 0) {
         $dels{$_} = 1;
       }
     }
     foreach (keys %dels) {
       delete($blosxom::files{$_});
     }
+
+    if(keys(%dels) and ! keys(%blosxom::files)) {
+      # erased everything
+
+      # include erased everything template here
+      if(@want_and) {
+	$this_search_verbose = 'All of <span class="aaa_verbose_tags">' 
+				. join(', ', @want_and)
+				. '</span>'; 
+	if (@want_or) {
+	  $this_search_verbose = '(' . $this_search_verbose . ') OR (';
+	}
+      } 
+      if (@want_or) {
+	$this_search_verbose .= 'Any of <span class="aaa_verbose_tags">'
+			      . join('|', @want_or)
+				. '</span>'; 
+	if (@want_and) {
+	  $this_search_verbose .= ')';
+	}
+      }
+      if (@want_not) {
+        if(length($this_search_verbose)) {
+	  $this_search_verbose .= ' BUT NONE OF (';
+	} else {
+	  $this_search_verbose .= ' Not tagged (';
+	}
+
+	$this_search_verbose .= '<span class="aaa_verbose_tags">'
+			      . join('|', @want_not)
+				. '</span>)'; 
+
+      }
+      $this_search_verbose .= '. ';
+
+      $this_search_table  = qq(\n\n<table class="aaa_verbose_table">\n);
+      $this_search_table .= qq(<caption>For reference on those tags</caption>);
+      $this_search_table .= qq(\n<tr><th>tag</th><th>usage count</th></tr>\n);
+      for $want (sort { $a cmp $b } (keys %want_ALL)) {
+        $this_search_table .= qq(<tr><td><span class="aaa_verbose_tags") .
+	                        qq(>$want</span></td><td><span ) .
+				qq(class="aaa_verbose_tags">) .
+				qq($want_ALL{$want}</span></td></tr>\n);
+      }
+      $this_search_table .= qq(</table>\n\n);
+      
+
+      open(CREATE_ONLY, '>', $errorpage) and
+      close CREATE_ONLY;
+      $blosxom::files{$errorpage} = time();
+      # by-pass directory check with permalink flag
+      $blosxom::use_permalink = 1;
+    }
   }
     
   1;
 }
 
-# the story() plugin method is called once per story entry. We will redefine
-# the $tags variable with every post, so that story rendering can then
-# have the proper tags available. story() gets called with a bunch of args.
+# the story() plugin method is called once per story entry. Normally we will
+# redefine the $tags variable with every post, so that story rendering can then
+# have the proper tags available.
+# But if filter() removed all stories, spit out an error page here.
+# story() gets called with a bunch of args.
 sub story {
   my ($pkg, $path, $filename, $story_ref, $title_ref, $body_ref) = @_;
 
   $tags = fill_template('aaa_no_tags');
+
+  if($filename eq '' and -f $errorpage) {
+    # error page invoked
+    $$title_ref = '';
+    $$body_ref = '';
+    $$story_ref = fill_template('aaa_nothing_left');
+    unlink $errorpage;
+    return 0;
+  }
+
   my $use = "$path/$filename.$blosxom::file_extension";
   my @parts;
 
@@ -225,13 +438,28 @@ Tags are one per line not starting with C<#>, and can be space,
 hyphen, or underscore separated. But spaces will be changed to
 underscores for URLs.
 
+Tags can be searched via CGI parameters. One or more C<tag=> CGI
+params can be used. Each one can contain one or more search fragments
+joined by a C<,> (comma). The default is to OR the named tags together
+for filtering the output, but if separated by C<^> (caret) they will
+ANDed, and if prefixed by C<~> (tilde) they will be NOTed. Tags joined
+by C<|> (pipe> will also be ORed. There is no way to specify precedence
+or grouping of the filter.
+
 The identified tags are associated with the matching
 C<foo.$file_extension> files. When C<foo.$file_extension> is processed, 
 C<$aaa_tags::tags> will be set to use in (and only in) the story template. 
 
 The C<$aaa_tags::top_tags> variable holds a configurable number of the
-most popular tags and is available in all templates. Here's the complete
-list of interpolatable variables:
+most popular tags and is available in all templates.
+
+If C<$threshold> is set in config, then C<$aaa_tags::frequent_tags> 
+will hold a similar list of tags with $threshold or more usage.
+
+When a tag filter removes all posts, the C<aaa_nothing_left> template
+will be invoked to display an error message.
+
+Here's the complete list of interpolatable variables:
 
 =over 4
 
@@ -241,15 +469,35 @@ Available in stories, and formatted according to the C<aaa_tag_link> template.
 
 =item * $aaa_tags::top_tags
 
-Available in anywhere, and formatted according to the C<aaa_tags_link> template.
+Available anywhere, and formatted according to the C<aaa_tags_link> template.
+
+=item * $aaa_tags::frequent_tags
+
+Available anywhere, and formatted according to the C<aaa_tags_link> template.
+Will be empty unless C<$threshold> is set in config.
 
 =item * $aaa_tags::tag_count
 
-Available in anywhere, this is the number of unique tags.
+Available anywhere, this is the number of unique tags.
+
+=item * $aaa_tags::this_search_terse
+
+Available anywhere, this is the current tag search in a terse (CGI param-ish)
+form.
+
+=item * $aaa_tags::this_search_table
+
+Available in C<aaa_nothing_left>, this is a table of all tags mentioned
+in the filter with usage frequency.
+
+=item * $aaa_tags::this_search_verbose
+
+Available in C<aaa_nothing_left>, this is the current tag search in a
+verbose, for humans, form.
 
 =item * $aaa_tags::story_count
 
-Available in anywhere, this is the number of tagged stories.
+Available anywhere, this is the number of tagged stories.
 
 =item * $aaa_tags::this_tag
 
@@ -270,6 +518,14 @@ of the current tag.
 
 Intended for use in templates used by C<aaa_tags> it has the count of stories
 using the current tag.
+
+=item * $aaa_tags::threshold
+
+This configuration variable is available for all templates.
+
+=item * $aaa_tags::top_count
+
+This configuration variable is available for all templates.
 
 =back
 
