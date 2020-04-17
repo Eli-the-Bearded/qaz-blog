@@ -1,4 +1,7 @@
 #!/bin/sh
+# Note: this program is rather buggy, specifically the wget test
+# does not work well. Probably best not to use it without a new
+# bad link check and a fair amount of manual testing.
 
 savefile=$PHTML/qz/etc/FIX-DATES
 
@@ -17,22 +20,22 @@ lcheck() {
     : still alive
   else
     echo deadlink >> $tags
+
+    # get the timestamp fix command from SAVE-DATES's save file
+    fix=$(grep "$file" $savefile)
+
+    # many old files are mode 444
+    chmod 644 "$file"
+    # most old files have very standard formatting with a single
+    # link as:
+    #   <p><a href='http://example.url/'>Link</a></p>
+    # we will rewrite those
+    perl -i -wpe 's,<a href=.(http.*).>Link</a>,dead link: $1,;' "$file"
+    chmod 444 "$file"
+
+    # restore dates
+    $fix
   fi 
-
-  # get the timestamp fix command from SAVE-DATES's save file
-  fix=$(grep "$file" $savefile)
-
-  # many old files are mode 444
-  chmod 644 "$file"
-  # most old files have very standard formatting with a single
-  # link as:
-  #   <p><a href='http://example.url/'>Link</a></p>
-  # we will rewrite those
-  perl -i -wpe 's,<a href=.(http.*).>Link</a>,dead link: $1,;' "$file"
-  chmod 444 "$file"
-
-  # restore dates
-  $fix
 }
 
 for arg ; do
