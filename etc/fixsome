@@ -1,0 +1,4 @@
+#!/bin/sh
+# just fix dates on some of them (much faster than fixing everything)
+
+for fragment ; do eval $(grep "$fragment" $PHTML/qz/etc/FIX-DATES) ; done
