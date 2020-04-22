@@ -1,10 +1,11 @@
 #!/usr/local/bin/perl-latest
+require 5.14.4;
 
 # Blosxom
 # Author: Rael Dornfest (2002-2003), The Blosxom Development Team (2005-2008)
 # QZ patch version 2020 Eli the Bearded
 #  https://qaz.wtf/qz/ and https://github.com/eli-the-bearded/qaz-blog/
-# Version: 2.1.2QZ-20200315
+# Version: 2.1.2QZ-20200420
 # Home/Docs/Licensing: http://blosxom.sourceforge.net/
 # Development/Downloads: http://sourceforge.net/projects/blosxom
 
@@ -92,13 +93,13 @@ use vars
     qw! $version $blog_title $blog_description $blog_language $blog_encoding $datadir $url %template $template $depth $num_entries $file_extension $default_flavour $static_or_dynamic $config_dir $plugin_list $plugin_path $plugin_dir $plugin_state_dir @plugins %plugins $static_dir $static_password @static_flavours $static_entries $path_info_full $path_info $path_info_yr $path_info_mo $path_info_da $path_info_mo_num $flavour $static_or_dynamic %month2num @num2month $interpolate $entries $output $header $show_future_entries %files %indexes %others $encode_xml_entities $content_type $use_permalink !;
 
 use strict;
-use FileHandle;
 use File::Find;
 use File::stat;
 use Time::Local;
-use CGI qw/:standard :netscape/;
+use CGI qw/:standard :netscape -utf8/;
+use open IO => ':utf8';
 
-$version = "2.1.2QZ-20200315";
+$version = "2.1.2QZ-20200420";
 
 # Load configuration from $ENV{BLOSXOM_CONFIG_DIR}/blosxom.conf, if it exists
 my $blosxom_config;
@@ -129,8 +130,6 @@ if ($blosxom_config) {
         warn "Cannot find or read blosxom config file '$blosxom_config'";
     }
 }
-
-my $fh = new FileHandle;
 
 %month2num = (
     nil => '00',
@@ -202,8 +201,6 @@ if (    !$ENV{GATEWAY_INTERFACE}
 }
 else {
     $static_or_dynamic = 'dynamic';
-    # ETB: does this next line do anything useful?
-    #param( -name => '-quiet', -value => 1 );
 }
 
 # Path Info Magic
@@ -274,8 +271,9 @@ $template = sub {
     my ( $path, $chunk, $flavour ) = @_;
 
     do {
-        return join '', <$fh>
-            if $fh->open("< $datadir/$path/$chunk.$flavour");
+	if (open(my $fh, '<', "$datadir/$path/$chunk.$flavour")) {
+	    return join '', <$fh>
+	}
     } while ( $path =~ s/(\/*[^\/]*)$// and $1 );
 
     # Check for definedness, since flavour can be the empty string
@@ -308,9 +306,8 @@ my %plugin_hash = ();
 
 # If $plugin_list is set, read plugins to use from that file
 if ( $plugin_list ) {
-    if ( -r $plugin_list and $fh->open("< $plugin_list") ) {
+    if ( -r $plugin_list and open(my $fh, '<', $plugin_list) ) {
         @plugin_list = map { chomp $_; $_ } grep { /\S/ && !/^#/ } <$fh>;
-        $fh->close;
     }
     else {
         warn "unable to read or open plugin_list '$plugin_list': $!";
@@ -509,7 +506,8 @@ if (    !$ENV{GATEWAY_INTERFACE}
                 $content_type =~ s!\n.*!!s;
                 my $fn = $p =~ m!^(.+)\.$file_extension$! ? $1 : "$p/index";
                 param('-quiet') or print "$fn.$flavour\n";
-                my $fh_w = new FileHandle "> $static_dir/$fn.$flavour"
+                my $fh_w;
+		open($fh_w, '>', "$static_dir/$fn.$flavour")
                     or die "Couldn't open $static_dir/$p for writing: $!";
                 $output = '';
                 if ( $indexes{$path} == 1 ) {
@@ -533,7 +531,7 @@ if (    !$ENV{GATEWAY_INTERFACE}
                     print $fh_w &generate( 'static', '', $p, $flavour,
                         $content_type );
                 }
-                $fh_w->close;
+                close $fh_w;
             }
         }
     }
@@ -694,10 +692,9 @@ sub generate {
             }
 
             use vars qw/ $title $body $raw /;
-            if ( -f "$path_file" && $fh->open("< $path_file") ) {
+            if ( -f "$path_file" && open(my $fh, '<', $path_file) ) {
                 chomp( $title = <$fh> );
                 chomp( $body = join '', <$fh> );
-                $fh->close;
                 $raw = "$title\n$body";
             } else {
                 # ETB: no story? move on (fixes double-print of last story
@@ -746,7 +743,6 @@ sub generate {
             $story = &$interpolate($story);
 
             $output .= $story;
-            $fh->close;
 
             $ne--;
         }

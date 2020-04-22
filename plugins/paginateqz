@@ -19,7 +19,8 @@ use vars qw( $prev_link $link_list $next_link $prev_url $next_url
            );
 
 use File::stat;
-use CGI qw/:standard :netscape/;
+use CGI qw/:standard :netscape -utf8/;
+
 
 sub start { 
   # Grab the templates at start

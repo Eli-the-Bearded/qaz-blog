@@ -9,7 +9,7 @@
 
 package better_title;
 
-use CGI qw/:standard/;
+use CGI qw/:standard :netscape -utf8/;
 
 # --- Configurable variables -----
 
