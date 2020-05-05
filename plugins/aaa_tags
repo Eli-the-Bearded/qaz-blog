@@ -1,6 +1,6 @@
 # Blosxom Plugin: aaa_tags
 # Author(s): Eli the Bearded <blossom@eli.users.panix.com>
-# Version: 2020-04-08
+# Version: 2020-05-04
 # Documentation: See the bottom of this file or type: perldoc aaa_tags
 
 package aaa_tags;
@@ -58,6 +58,10 @@ my %template = (
            # just like aaa_tag_link, but used in $aaa_tags::top_tags
 	   aaa_tags_link => '<a href="$aaa_tags::this_link">$aaa_tags::this_tag</a>: $aaa_tags::this_count',
 
+	   # when there has been a tag search, this will be used to fill out
+	   #       $aaa_tags::this_search       
+	   aaa_search_desc => 'Tag search results for <span class="aaa_search_term">$aaa_tags::this_search_terse</span>',
+
 	   # used when a tag filter has removed all posts from the blog
 	   aaa_nothing_left => <<'AAA_NOTHING'
 <div class=aaa_error>
@@ -98,6 +102,7 @@ $top_tags = '';
 $frequent_tags = '';
 $tag_count = $story_count = 0;
 $this_search_terse = '';
+$this_search = '';
 
 # only story template
 $tags = '';
@@ -292,6 +297,7 @@ sub filter {
 			     );
     $this_search_terse =~ s/^\s*,\s*//g;
     $this_search_terse =~ s/\s*,\s*$//g;
+    $this_search = fill_template('aaa_search_desc');
 
     # not safe to delete from hash while iterating over it, so
     # need temp list of deletes
@@ -480,6 +486,11 @@ Will be empty unless C<$threshold> is set in config.
 
 Available anywhere, this is the number of unique tags.
 
+=item * $aaa_tags::this_search
+
+Available anywhere, this is a description of the current tag search OR
+empty if not searching.
+
 =item * $aaa_tags::this_search_terse
 
 Available anywhere, this is the current tag search in a terse (CGI param-ish)
@@ -529,10 +540,47 @@ This configuration variable is available for all templates.
 
 =back
 
+Here are the flavour templates used:
+
+=over 4
+
+=item * aaa_name_sep
+
+Joins entries together in the per story $aaa_tags::tags, default: ', '
+
+=item * aaa_tags_sep
+
+Joins entries together in $aaa_tags::top_tags, default: '</li><li>'
+
+=item * aaa_no_tags
+
+Value of $aaa_tags::tags if no tags on a story, default: 'no tags &mdash; so sad'
+
+=item * aaa_tag_link
+
+Formating for each tag in per story $aaa_tags::tags, default:
+'<a href="$aaa_tags::this_link">$aaa_tags::this_tag ($aaa_tags::this_count)</a>'
+
+=item * aaa_tags_link
+
+Formating for each tag in $aaa_tags::top_tags, default:
+'<a href="$aaa_tags::this_link">$aaa_tags::this_tag</a>: $aaa_tags::this_count'
+
+=item * aaa_search_desc
+
+When there has been a tag search, this will be used to fill out
+$aaa_tags::this_search, default:
+'Tag search results for <span class="aaa_search_term">$aaa_tags::this_search_terse</span>'
+
+=item * aaa_nothing_left
+
+Used to present an error page with a tag filter has removed all posts from the blog.
+
+=back
 
 =head1 VERSION
 
-2020-03-16
+2020-05-04
 
 =head1 AUTHOR
 

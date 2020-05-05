@@ -1,7 +1,7 @@
 # Blosxom Plugin:  paginateqz
 # Author(s):       Eli the Bearded <blossom@eli.users.panix.com>
-# Version:         0.50 -- 2020-03-11
-# URL:             https://qaz.wtf/qz/blosxom/2020/03/11/new-paginate-plugin
+# Version:         0.55 -- 2020-05-04
+# URL:             https://qaz.wtf/qz/blosxom/new-paginate-plugin
 # Git:             https://github.com/eli-the-bearded/qaz-blog/
 # Documentation:   See the bottom of this file or type: perldoc paginateqz;
 #                  TL;DR: this combines cooluri (nice permalinks) with paginate
@@ -14,13 +14,12 @@ package paginateqz;
 
 use vars qw( $prev_link $link_list $next_link $prev_url $next_url
 	     $curr_number $curr_url $curr_link $np_sep
-             $skip $page $pages 
+             $skip $page $pages $this_page  
 	     $curr_path %template $prev_ref $next_ref
            );
 
 use File::stat;
 use CGI qw/:standard :netscape -utf8/;
-
 
 sub start { 
   # Grab the templates at start
@@ -32,7 +31,7 @@ sub start {
   }
   # init to blank
   $prev_link = $link_list = $next_link = $prev_url = $next_url =
-    $curr_number = $curr_url = $curr_link = $np_sep = '';
+    $curr_number = $curr_url = $curr_link = $np_sep = $this_page = '';
   return 1;
 }
 
@@ -96,10 +95,11 @@ sub filter {
 
   # How many pages in total?
   my $num_files = scalar( keys %$files_ref );
-  $pages = ($num_files / $blosxom::num_entries) + 1;
+  $pages = int($num_files / $blosxom::num_entries) + 1;
 
   # Make sure the page number param is in the valid range;
-  ($page) = (param("page") =~ /(\d+)/); $page ||= 1;
+  $param_page = param("page");
+  ($page) = ($param_page =~ /(\d+)/); $page ||= 1;
 
   # Determine number of entries to skip
   $skip = $blosxom::num_entries * ($page-1);
@@ -177,6 +177,12 @@ sub head {
   push @list, fill_template('paginate_list_end');
   $link_list = join '', @list;
 
+  # only fill out if a page was specified or
+  # tag was specified in CGI request
+  if (length($param_page) > 0 or length(param("tag"))) {
+      $this_page = fill_template('paginate_this_page');
+  }
+
   # Provide a next page link, if needed.
   if (($page+1) < $pages) {
     param("page" => $page + 1);
@@ -233,6 +239,7 @@ html paginate_list_join  |
 html paginate_list_item <a href="$paginateqz::curr_url">$paginateqz::curr_number</a>
 html paginate_list_curr_item <b>$paginateqz::curr_number</b>
 html paginate_list_end  ] 
+html paginate_this_page Page $paginateqz::page of $paginateqz::pages
 __END__
 
 =head1 NAME
@@ -250,17 +257,30 @@ The following variables are available for display in Blosxom templates:
 
 =over 4
 
-=item * $paginate::prev_link
+=item * $paginateqz::prev_link
 
 Contains link to previous page, is empty if a this link is not valid.
 
-=item * $paginate::link_list
+=item * $paginateqz::link_list
 
 Contains the entire list of links to available pages.
 
-=item * $paginate::next_link
+=item * $paginateqz::next_link
 
 Contains link to next page, is empty if a this link is not valid.
+
+=item * $paginateqz::this_page
+
+Empty if not in a page or tag search, otherwise gives Page N of M info.
+
+=item * $paginateqz::page
+
+Current page number
+
+=item * $paginateqz::pages
+
+Total number of pages
+
 
 =back
 
@@ -320,6 +340,12 @@ Default: <b>$paginateqz::curr_number</b>
 Placed at the end of the page list.
 
 Default: " ] "
+
+=item * paginate_this_page
+
+Used to populate $paginateqz::this_page when page or tag search is in effect.
+
+Default: "Page $paginateqz::page of $paginateqz::pages"
 
 =back
 
