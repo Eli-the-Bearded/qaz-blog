@@ -62,7 +62,10 @@ h3                { color: black;
 .wrapper          { position: relative; height: 100%; padding: 0; margin: 0; }
 .legal            { bottom: -2em;  }
 
-.pagination         { word-spacing: 2em; }
+.pagination       { word-spacing: 2em; }
+
+.pagination_top   { font-size: 18px; color: #333; }
+.aaa_search_term  { text-decoration: underline; }
 
 .imgbox           { border: 1pt solid black; padding: 4pt; margin: 2pt; }
 
