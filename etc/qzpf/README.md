@@ -84,13 +84,13 @@ for paragraph start macros. The default idea of paragraphs is not useful
 for this syntax, but it can be changed.
 
 ```
-:set paragraphs=p\ hrbri\ d
+:set paragraphs=ppp\ hrbri\ d
 ```
 
 The setting is a list of character *pairs* that follow a `.` in the
 first column. It's made tricky by `"` starting a comment in the
 settings, and `'` not working as a quote character there. So backslash
-to escape whitespace. The changed version will accept `.p`, `.hr`,
+to escape whitespace. The changed version will accept `.pp`, `.p`, `.hr`,
 `.br`, `.i`, and `.d` as marking new paragraphs. You might find that
 image tags or line breaks shouldn't be counted, adjust to taste.
 

@@ -131,6 +131,40 @@ run_notags
 
 ###################################################
 
+testname=basic-paragraphs
+cat > $testname.in <<_INput
+Title
+.p
+.pp
+./p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p></p>
+<p></p>
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=classy-paragraphs
+cat > $testname.in <<_INput
+Title
+.p aa
+.pp bb
+./p
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+<p class="aa"></p>
+<p class="bb"></p>
+_WAnted
+run_notags
+
+
+###################################################
+
 testname=classy-paragraph-1
 cat > $testname.in <<_INput
 Title
@@ -506,6 +540,23 @@ _INput
 cat > $testname.out <<_WAnted
 <h3>Title</h3>
 This has <b>bold</b> and <i>italic</i> and <code>code</code> parts.
+_WAnted
+run_notags
+
+
+###################################################
+
+# Note the \`code\` to disarm the `` from the shell.
+testname=nested-inline
+cat > $testname.in <<_INput
+Title
+This has _*bold*_ and *_italic_* and \`_*code*_\` parts.
+And this is code <code>_without_ italic *or* bold</code> content.
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title</h3>
+This has <i><b>bold</b></i> and <b><i>italic</i></b> and <code>_*code*_</code> parts.
+And this is code <code>_without_ italic *or* bold</code> content.
 _WAnted
 run_notags
 

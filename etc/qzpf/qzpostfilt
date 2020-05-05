@@ -20,6 +20,7 @@
 #  .p		start a <p>aragraph
 #  .p TYPE	start a <p class=TYPE>
 #  ./p		end a paragraph
+#  .pp [TYPE]   like a "./p" ".p [TYPE]" pair
 #  .d		start a <div>
 #  .d TYPE	start a <div class=TYPE>
 #  ./d		end a </div>
@@ -184,6 +185,8 @@ sub dotline {
 
   if ($action eq 'd' ) { $action = 'div'; }
   if ($action eq '/d') { $action = '/div'; }
+  if ($action eq 'pp') { $action = 'p'; print '</p>'; }
+
 
   if ($action =~ m:^/:) {
     print "<$action>";
@@ -224,14 +227,46 @@ sub consume {
     }
 
     if ( $l =~ s%^(\s*<[^>]*>)%% ) {
-      $o .= $1;
+      my $found = $1;
+      $o .= $found;
+      if ( $found =~ /<code/i ) {
+        if ( $l =~ s%^(.*?</code\b[^>]*>)%% ) {
+	  $o .= $1;
+        } else {
+	  # include rest of line; properly we should remember
+	  # we are in a <code> block for not interpreting * or _
+	  # on next line(s), but qzpostfilt is works only with
+	  # around single line state for inline formatting
+	  $o .= $l;
+	  $l = '';
+	}
+	next;
+      }
     }
 
+    # consume all markup-free content to first <, then restart loop
+    if ( $l =~ s/^([^*_`<]+)</</ ) {
+      $o .= $1;
+      next;
+    }
+
+    # consume all markup-free content on a line with no <
     if ( $l =~ s/^([^*_`]+)// ) {
       $o .= $1;
     }
 
     # line is empty or starts with *, _, or ` now
+    # code should be higher priority than * or _ and not recurse
+    if ( $l =~ s/^`// ) {
+      if ($l =~ s%^([^`]+)`%% ) {
+        # found end, real code block
+        $o .= "<code>$1</code>";
+      } else {
+        $o .= '`';
+      }
+      next;
+    }
+
     if ( $l =~ s/^\*// ) {
       if ($l =~ s%^([^*]+)\*%<b>$1</b>% ) {
         1; # substitution worked!
@@ -246,15 +281,6 @@ sub consume {
         1; # substitution worked!
       } else {
         $o .= '_';
-      }
-      next;
-    }
-
-    if ( $l =~ s/^`// ) {
-      if ($l =~ s%^([^`]+)`%<code>$1</code>% ) {
-        1; # substitution worked!
-      } else {
-        $o .= '`';
       }
       next;
     }
