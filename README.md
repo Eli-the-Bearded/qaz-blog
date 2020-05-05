@@ -4,6 +4,9 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/05/04/may-updates
+  * Updates to `qzpostfilt`, `aaa_tags`, and `paginateqz`
+
 https://qaz.wtf/qz/blosxom/2020/04/22/utf-8-fixes
   * Clean UTF-8 handling throughout blosxom and plugins
   * Removed buggy (vis-a-vis UTF-8) `FileHandle` module
