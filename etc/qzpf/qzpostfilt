@@ -12,7 +12,14 @@
 #  *bold* use in-line markdown-style syntax. Markdown style
 #  syntax does not cross line bondaries. So the "*roff" in
 #  the first line renders as-is, it doesn't create a bolded
-#  stretch to the word "*bold*".
+#  stretch to the word `*bold*`.
+#
+#  The inline syntax supported is:
+#
+#  `code content`    will be placed in a <code>...</code> block
+#  *bold*            <b>embolden</b> text (can have _italic_ inside)
+#  *italic*          <b>italicize</b> text (can have *bold* inside)
+#  &X;               when X is a single character, replace with &#x(ord(X));
 #
 #  Block level syntax use [nt]roff style commands, where in
 #  the examples [this] means "this" is an optional something.
@@ -113,8 +120,9 @@ while(<>) {
   if ($. == 1) {
     # if not starting with . or < and has content
     if (! /^[.<]/ and /\S/) {
-      s%(.*)%<h3>$1</h3>%;
-      print;
+      print '<h3>';
+      consume($_, '');
+      print '</h3>';
       next;
     }
 
@@ -245,18 +253,18 @@ sub consume {
     }
 
     # consume all markup-free content to first <, then restart loop
-    if ( $l =~ s/^([^*_`<]+)</</ ) {
+    if ( $l =~ s/^([^*_`<&]+)</</ ) {
       $o .= $1;
       next;
     }
 
     # consume all markup-free content on a line with no <
-    if ( $l =~ s/^([^*_`]+)// ) {
+    if ( $l =~ s/^([^*_`&]+)// ) {
       $o .= $1;
     }
 
-    # line is empty or starts with *, _, or ` now
-    # code should be higher priority than * or _ and not recurse
+    # line is empty or starts with &, *, _, or ` now
+    # `code` should be higher priority than * or _ and not recurse
     if ( $l =~ s/^`// ) {
       if ($l =~ s%^([^`]+)`%% ) {
         # found end, real code block
@@ -265,6 +273,16 @@ sub consume {
         $o .= '`';
       }
       next;
+    }
+
+    if ( $l =~ s/^\&// ) {
+      # make the program encode &.; to &#x2E; for me (and also things other
+      # than period).
+      if ( $l =~ s/^(.);// ) {
+        $o .= sprintf('&#x%02X;', ord($1));
+      } else {
+        $o .= '&';
+      }
     }
 
     if ( $l =~ s/^\*// ) {

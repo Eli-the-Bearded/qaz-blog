@@ -35,6 +35,18 @@ run_notags
 
 ###################################################
 
+testname=bold-in-auto-h3
+cat > $testname.in <<_INput
+This is *BOLD* now
+_INput
+cat > $testname.out <<_WAnted
+<h3>This is <b>BOLD</b> now</h3>
+_WAnted
+run_notags
+
+
+###################################################
+
 testname=dot-first-line
 cat > $testname.in <<_INput
 .p
@@ -416,6 +428,20 @@ _INput
 cat > $testname.out <<_WAnted
 <h3>Title</h3>
 <img src="https://site/image.png" alt="alt text" />
+_WAnted
+run_notags
+
+
+###################################################
+
+testname=entities
+cat > $testname.in <<_INput
+Title &&; Such &.;..
+&amp; &#x26; ampersand &
+_INput
+cat > $testname.out <<_WAnted
+<h3>Title &#x26; Such &#x2E;..</h3>
+&amp; &#x26; ampersand &
 _WAnted
 run_notags
 
