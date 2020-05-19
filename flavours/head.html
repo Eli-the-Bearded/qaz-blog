@@ -23,11 +23,18 @@
    $paginateqz::this_page
 
    <!-- seen in small screens and lynx -->
-   <nav class=topnav>
-    <h2>Top Tags</h2>
-     <ul class=subcats>
-      <li>$aaa_tags::top_tags</li>
-     </ul>
-   </nav>
-   <br />
+   <div class=small_upper>
+    <div>
+    <nav class=topnav>
+     <h2>Top Tags</h2>
+      <ul class=subcats>
+       <li>$aaa_tags::top_tags</li>
+      </ul>
+    </nav>
+    </div>
+    <div class=searchbox>
+     <form method=GET action="$url"><label for="sutag">Tag search</label>
+     <input type=text name=tag id=sutag size=12></form>
+    </div>
+   </div>
 

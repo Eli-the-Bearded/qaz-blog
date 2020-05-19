@@ -15,6 +15,10 @@ h3                { color: black;
                     font-weight: bold; font-size:16px;
                   }
 
+h4                { color: black;
+                    font-weight: bold; font-size:14px;
+                  }
+
 .storytitle       { font-weight: bold; }
 
 .dateheader       { font-size: 14px; color: #333;
@@ -58,7 +62,7 @@ h3                { color: black;
 		    bottom: 0; width: 100%; height: 50px;
 		  }
 
-.topnav           { display: none; }
+.small_upper      { display: none; }
 .wrapper          { position: relative; height: 100%; padding: 0; margin: 0; }
 .legal            { bottom: -2em;  }
 
@@ -86,13 +90,16 @@ Code { background-color: black; color: #94ed30;
 @media (max-width: 800px) {
   .leftcol      { display: none; }
   nav           { display: block; }
-  .topnav       { display: block; }
-  ul.subcats    { display: inline; list-style: "\1F3F7"; list-style-position: inside; }
-  ul.subcats > li { float: left; }
+  .small_upper  { display: block; }
+  ul.subcats    { display: inline; list-style: "\1F3F7"; list-style-position: inside; float:left; }
+  ul.subcats > li { float:left; }
+  .searchbox    { clear: left; }
+  .topnav       { overflow: auto; }
   .mainblock    { padding: 1vh 2vw; width: 96vw; left: 0; }
-  body         { font-size: 18px; }
-  h2           { font-size: 24px; clear: both; }
-  h3           { font-size: 22px; clear: both; }
+  body          { font-size: 18px; }
+  h2            { font-size: 24px; clear: both; }
+  h3            { font-size: 22px; clear: both; }
+  h4            { font-size: 18px; clear: both; }
   .dateheader   { font-size: 18px; }
   .pagetitle    { font-size: 24px; }
   .pageinfo     { font-size: 18px; }
