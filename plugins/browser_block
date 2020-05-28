@@ -4,7 +4,6 @@
 # Documentation: See the bottom of this file or type: perldoc browser_block
 
 package browser_block;
-use CGI qw/:standard/;
 
 # plugin configuration {
 
@@ -12,9 +11,17 @@ use CGI qw/:standard/;
 #    Megaindex.com is an SEO research site, for other people
 #                  to get access to who links to them, etc.
 #    Majestic.com (which runs MJ12bot) is similar.
-# I block both because they each load more pages than Google
+# I block both of those because they each load more pages than Google
 # for 100% zero value to me.
-our $block_re = qr/MegaIndex[.](ru|com)|MJ12bot/i;
+#
+#    SemrushBot yet another "backlinks" bot
+#    AhrefsBot, you guessed it SEO
+#    NAVER is a badly behaved bot for a Korean site
+#
+#    mauibot is merely suspicious
+#
+# And in general, bots with the purpose of "SEO" are dubious.
+our $block_re = qr/MegaIndex[.](ru|com)|MJ12bot|seo.*bot|SemrushBot|AhrefsBot|NAVER|mauibot/i;
 
 # tell the viewer what user agent was blocked (for debug)
 our $verbose = 0;
