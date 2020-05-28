@@ -1,0 +1,61 @@
+# Blosxom Plugin: extrameta
+# Author(s): Eli the Bearded <blossom@eli.users.panix.com>
+# Version: 2020-05-27
+# Documentation: See the bottom of this file or type: perldoc extrameta
+# Documentation: tl;dr: exists to provide a variable for putting meta tags in
+#                       page headers. Set and use $extrameta::header
+
+
+package extrameta;
+use strict;
+use vars qw( $header );
+
+
+sub start {
+   if(! defined($header) ) { $header = '' };
+   return 1;
+}
+
+1;
+__END__
+=head1 NAME
+
+Blosxom Plug-in: extrameta
+
+=head1 SYNOPSIS
+
+Creates an empty variable to be used in C<<head>> section of HTML pages.
+Plugins that need to set meta headers can this variable to hold those.
+
+=head1 DESCRIPTION
+
+The C<$extrameta::header> should be B<appended> to whenever an extra header
+is needed. For safety, one can see if this plugin is enabled first. Then
+C<$extrameta::header> should be included in the HEAD block of HTML flavour
+templates.
+
+Example:
+
+	if ($blosxom::plugins{"extrameta"} > 0) {
+		$extrameta::header .= qq(<meta name="robots" content="noindex">);
+	}
+
+=head1 VERSION
+
+2020-05-27
+
+=head1 AUTHOR
+
+Eli the Bearded <blossom@eli.users.panix.com>
+
+=head1 SEE ALSO
+
+Blosxom, http://www.blosxom.com/
+
+=head1 LICENSE
+
+Released as public domain.
+
+=cut
+
+

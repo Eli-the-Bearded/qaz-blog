@@ -1,6 +1,6 @@
 # Blosxom Plugin: aaa_tags
 # Author(s): Eli the Bearded <blossom@eli.users.panix.com>
-# Version: 2020-05-04
+# Version: 2020-05-27
 # Documentation: See the bottom of this file or type: perldoc aaa_tags
 
 package aaa_tags;
@@ -290,6 +290,14 @@ sub filter {
     for my $not (@want_not) {
       $wnter .= "~$not";
     }
+
+    # discourage tag result pages from being indexed
+    if ($page != 1) {
+      if ($blosxom::plugins{"extrameta"} > 0) {
+        $extrameta::header .= qq(<meta name="robots" content="noindex">);
+      }
+    }
+
     # this is just the value to stuff into tag=
     $this_search_terse = join(',', join('^', @want_and), 
                                    join('|', @want_or),
@@ -465,6 +473,9 @@ will hold a similar list of tags with $threshold or more usage.
 When a tag filter removes all posts, the C<aaa_nothing_left> template
 will be invoked to display an error message.
 
+If the C<extrameta> plugin is available, tag result pages will be flagged
+as C<noindex> to reduce duplication in search engines.
+
 Here's the complete list of interpolatable variables:
 
 =over 4
@@ -580,7 +591,7 @@ Used to present an error page with a tag filter has removed all posts from the b
 
 =head1 VERSION
 
-2020-05-04
+2020-05-27
 
 =head1 AUTHOR
 

@@ -1,6 +1,6 @@
 # Blosxom Plugin:  paginateqz
 # Author(s):       Eli the Bearded <blossom@eli.users.panix.com>
-# Version:         0.55 -- 2020-05-04
+# Version:         0.56 -- 2020-05-27
 # URL:             https://qaz.wtf/qz/blosxom/new-paginate-plugin
 # Git:             https://github.com/eli-the-bearded/qaz-blog/
 # Documentation:   See the bottom of this file or type: perldoc paginateqz;
@@ -100,6 +100,13 @@ sub filter {
   # Make sure the page number param is in the valid range;
   $param_page = param("page");
   ($page) = ($param_page =~ /(\d+)/); $page ||= 1;
+
+  # discourage later pages from being indexed
+  if ($page != 1) {
+    if ($blosxom::plugins{"extrameta"} > 0) {
+      $extrameta::header .= qq(<meta name="robots" content="noindex">);
+    }
+  }
 
   # Determine number of entries to skip
   $skip = $blosxom::num_entries * ($page-1);
@@ -253,6 +260,9 @@ reader to flip through ranges of stories with a previous link, next link,
 and a list of available pages.  Page length is defined by the C<$num_entries>
 setting in the main blosxom config.
 
+If the C<extrameta> plugin is available, pages after the first will be flagged
+as C<noindex> to reduce duplication in search engines.
+
 The following variables are available for display in Blosxom templates:
 
 =over 4
@@ -356,7 +366,7 @@ links can become buttons and the page list can become a drop-down selector.
 
 =head1 VERSION
 
-v0.50
+v0.56 -- 2020-05-27
 
 =head1 AUTHORS
 
