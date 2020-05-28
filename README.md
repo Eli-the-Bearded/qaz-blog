@@ -4,6 +4,13 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/05/28/sitemap
+  * Two plugins added, one mine, one not mine.
+  * `gsitemap`: not mine, helper for making sitemap.xml files
+  * `extrameta`: simple container plugin for adding meta tags
+  * updates to `aaa_tags` and `paginateqz` to set meta tags
+  * update to `browser_block` to stop some more bots
+
 https://qaz.wtf/qz/blosxom/2020/05/04/may-updates
   * Updates to `qzpostfilt`, `aaa_tags`, and `paginateqz`
 
