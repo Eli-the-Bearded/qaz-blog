@@ -1,0 +1,6 @@
+#!/bin/sh
+log="$1"
+if [ ! -f "$log" ] ; then echo "$0: usage by-ip-worst LOGFILE[.gz]"; exit 2 ; fi
+shift
+logprint -f common --filter status=200 -c bytes,ip $log $@ |
+    adder -n -b 1 -r 0 | sort -nrk 2 | head

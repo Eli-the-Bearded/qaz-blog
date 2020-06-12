@@ -1,0 +1,1200 @@
+#!/usr/local/bin/perl -w
+# Pretty print apache log entries.
+#
+# Benjamin Elijah Griffin	15 Feb 2001
+use strict;
+use vars qw( $id %format %suffixes %pos $pos $format @cols $sep 
+             $debug $reqall $hide $undef $join $quiet $headers $re $err
+             @data $col $file $suf $seplen $out $req $q $id %q
+	     $pre $filt $vbl $op $val $filter @filter $rc
+           );
+
+# Initializion of key variables {
+
+my $VERSION = "1.1";
+my $LONG_VERSION_INFO = "initial 15 Feb 2001; this 26 May 2020";
+
+$format = 'combined';
+$sep    = "\t";
+$undef  = '[undef]';
+$join   = '&';
+$debug  = 0;
+$quiet  = 0;
+$filter = 0;
+
+$id = $0;
+$id =~ s:.*/::;
+
+%suffixes = (
+	gz  => [ 'gzip',	'gzip -d',	],
+	z   => [ 'gzip',	'gzip -d',	],
+	Z   => [ 'compress',	'zcat',		],
+	bz2 => [ 'bzip2',	'bzip2 -d',	],
+);
+
+%format = (
+
+  common => [ # Standard apache 'common' log format
+    # Column names
+    [ 'ip', 'identd', 'username', 'date', 'time', 'tz', 'method', 'file',
+      'protocol', 'status', 'bytes', 'other', ],
+    # Regexp
+    qr%^                                #                       anchor
+          ([\w.]+)                      # IP
+      \s+                               #                       whitespace
+          (\S+)                         # ident check
+      \s+                               #                       whitespace
+          (\S+)                         # auth user
+      \s+                               #                       whitespace
+          \[(\d\d/\w\w\w/\d\d\d\d)      # date
+          :(\d\d:\d\d:\d\d)             # time
+          \s+([\d-]+)\]                 # timezone
+      \s+                               #                       whitespace
+          "(\w+)                        # GET/POST/HEAD, etc
+      \s+                               #                       whitespace
+          (\S+)                         # URI/URL
+      (?:                               # grouping for optional version
+      \s+                               #                       whitespace
+          (HTTP/[\d.]+)                 # protocol version
+      )?                                # end grouping
+          "                             # end of request line
+      \s+                               #                       whitespace
+          (\d\d\d)                      # response code, 200 success, etc
+      \s+                               #                       whitespace
+          (\d+|-)                       # bytes written
+      \s*                               #                       whitespace
+          (.*)                          # other
+      $                                 #                       anchor
+      %xi,
+   ],
+    
+  combined => [ # Standard apache 'combined' log format
+    # Column names
+    [ 'ip', 'identd', 'username', 'date', 'time', 'tz', 'method', 'file',
+      'protocol', 'status', 'bytes', 'referer', 'client', 'other', ],
+    # Regexp
+    qr%^                                #                       anchor
+          ([\w.]+)                      # IP
+      \s+                               #                       whitespace
+          (\S+)                         # ident check
+      \s+                               #                       whitespace
+          (\S+)                         # auth user
+      \s+                               #                       whitespace
+          \[(\d\d/\w\w\w/\d\d\d\d)      # date
+          :(\d\d:\d\d:\d\d)             # time
+          \s+([\d-]+)\]                 # timezone
+      \s+                               #                       whitespace
+          "(\w+)                        # GET/POST/HEAD, etc
+      \s+                               #                       whitespace
+          (\S+)                         # URI/URL
+      (?:                               # grouping for optional version
+      \s+                               #                       whitespace
+          (HTTP/[\d.]+)                 # protocol version
+      )?                                # end grouping
+          "                             # end of request line
+      \s+                               #                       whitespace
+          (\d\d\d)                      # response code, 200 success, etc
+      \s+                               #                       whitespace
+          (\d+|-)                       # bytes written
+      \s+                               #                       whitespace
+          "(\S+)"                       # referrer
+      \s+                               #                       whitespace
+          "([^"]+)"                     # user agent
+      \s*                               #                       whitespace
+          (.*)                          # other
+      $                                 #                       anchor
+      %xi,
+   ],
+    
+  rawpanix => [ # Panix getlogs
+    # Column names
+    [ 'ownerid', 'usage', 'bytes', 'date', 'time', 'file', 'ip',
+      'status', 'referer', 'server', 'other' ],
+    # Regexp
+    qr%^                                #                       anchor
+         (\w+)                          # ownerid
+      \s+                               #                       whitespace
+         (\w+)                          # usage
+      \s+                               #                       whitespace
+         (\d+|-)                        # bytes written
+      \s+                               #                       whitespace
+         (\d\d\d\d:\d\d:\d\d):          # date
+         (\d\d:\d\d:\d\d)               # time
+      \s+                               #                       whitespace
+         (\S+)                          # file
+      \s+                               #                       whitespace
+         (\S+)                          # ip
+      \s+                               #                       whitespace
+         (\d\d\d)                       # response code, 200 success, etc
+      \s+                               #                       whitespace
+         (\S+)                          # referer
+      \s+                               #                       whitespace
+         (\S+)                          # server
+      \s*                               #                       whitespace
+         (\S*)                          # other
+      $                                 #                       anchor
+      %xi,
+   ],
+
+  mycombined => [ # My apache combined log format
+    # Column names
+    [ 'ip', 'username', 'date', 'time', 'tz', 'method', 'file',
+      'protocol', 'status', 'bytes', 'referer', 'client', 'other', ],
+    # Regexp
+    qr%^                                #                       anchor
+          ([\w.]+)                      # IP
+      \s+                               #                       whitespace
+          ([^[]+)                       # auth user
+      \s+                               #                       whitespace
+          \[(\d\d/\w\w\w/\d\d\d\d)      # date
+          :(\d\d:\d\d:\d\d)             # time
+          \s+([\d-]+)\]                 # timezone
+      \s+                               #                       whitespace
+          <(\w+)                        # GET/POST/HEAD, etc
+      \s+                               #                       whitespace
+          (\S+)                         # URI/URL
+      (?:                               # grouping for optional version
+      \s+                               #                       whitespace
+          (HTTP/[\d.]+)                 # protocol version
+      )?                                # end grouping
+          >                             # end of request line
+      \s+                               #                       whitespace
+          (\d\d\d)                      # response code, 200 success, etc
+      \s+                               #                       whitespace
+          (\d+|-)                       # bytes written
+      \s+                               #                       whitespace
+          <([^>]+)>                     # referrer
+      \s+                               #                       whitespace
+          <([^>]+)>                     # user agent
+      \s*                               #                       whitespace
+          (.*)                          # other
+      $                                 #                       anchor
+      %xi,
+   ],
+    
+);
+
+# Prototypes.
+sub parsesimpleform ($$);
+sub parseurl ($$);
+sub comp ($$$);
+
+# } initializion of key variables
+
+while(defined($ARGV[0]) and substr($ARGV[0], 0, 1) eq '-') {
+  if (($ARGV[0] eq '-f') or ($ARGV[0] eq '--format'))  {
+    shift;
+    $format = shift;
+    if(!defined($format) or !defined($format{$format})) {
+      die "$id: Unknown log format '$format'\n";
+    }
+  } elsif (($ARGV[0] eq '-u') or ($ARGV[0] eq '--undef'))  {
+    shift;
+    $undef = shift;
+    if (!defined($undef)) {
+      warn "$id: using empty string for undef values\n";
+      $undef = '';
+    }
+  } elsif (($ARGV[0] eq '-j') or ($ARGV[0] eq '--multi-join'))  {
+    shift;
+    $join = shift;
+    if (!defined($join)) {
+      warn "$id: using empty sperator for multiple value join\n";
+      $join = '';
+    }
+  } elsif (($ARGV[0] eq '-F') or ($ARGV[0] eq '--filter'))  {
+    shift;
+    $_ = shift;
+
+    if (!defined($_) or ! /^(\w+(?::\@?\w+)?)                # COLSPEC re
+                            (=[~=]|=|!~|[<>]=|!==?|[<>]|\?)  # op re
+			    (.*)                             # value re
+			    /x) {
+      warn "$id: ignoring invalid filter spec '$_'\n";
+    } else {
+      $col = $1;
+      $op  = $2;
+      $val = $3;
+
+      if ($op eq '=~' or $op eq '!~') {
+        my $re;
+
+	eval "\$re = qr{$val}";
+	if ($@) {
+	  $err = $@;
+	  $err =~ s/\s+at\s+\(eval\s+\d+\).*//s;
+	  warn "$id: ignoring invalid filter: $err\n";
+	  next;
+	}
+	$val = $re;
+      }
+
+      # COLSPEC re
+      if ($col =~ s/:(\@?\w+)//) {
+        $vbl = $1;
+	$filter[$filter]{col} = "$col:$vbl";
+	$filter[$filter]{vbl} = $vbl;
+	$filter[$filter]{op}  = $op;
+	$filter[$filter]{val} = $val;
+      } else {
+        $filter[$filter]{col} = $col;
+        $filter[$filter]{op}  = $op;
+        $filter[$filter]{val} = $val;
+      }
+
+      $filter ++;
+    }
+  } elsif (($ARGV[0] eq '-s') or ($ARGV[0] eq '--seperator'))  {
+    shift;
+    $sep = shift;
+    if (!defined($sep)) {
+      warn "$id: using empty column sperator\n";
+      $sep = '';
+    }
+  } elsif (($ARGV[0] eq '-c') or ($ARGV[0] eq '--columns'))  {
+    shift;
+    $_ = shift;
+
+    # COLSPEC re
+    if (!defined($_) or ! /^(?:\w+(?::\@?\w+)?,)*\w+(?::\@?\w+)?$/) {
+      die "$id: Invalid columns spec: $_\n";
+    }
+    @cols = split(/,/);
+  } elsif (($ARGV[0] eq '-r') or ($ARGV[0] eq '--require-all'))  {
+    $reqall = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-q') or ($ARGV[0] eq '--quiet'))  {
+    $quiet = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-h') or ($ARGV[0] eq '--headers'))  {
+    $headers = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-D') or ($ARGV[0] eq '--debug'))  {
+    $debug ++;
+    shift;
+  } elsif ($ARGV[0] eq '--version') {
+    print "$id version $VERSION $LONG_VERSION_INFO\n";
+    exit(0);
+  } elsif ($ARGV[0] eq '--known-compressions') {
+    &usage_comps();
+    exit(0);
+  } elsif ($ARGV[0] eq '--known-formats') {
+    &usage_formats();
+    exit(0);
+  } elsif ($ARGV[0] eq '--examples') {
+    &usage_examples();
+    exit(0);
+  } elsif ($ARGV[0] eq '--help') {
+    &usage(0);
+  } elsif ($ARGV[0] eq '-' or $ARGV[0] eq '--') {
+    shift if $ARGV[0] eq '--';
+    last;
+  } else {
+    print STDERR "$id: $ARGV[0] not a recognized option\n";
+    print STDERR "$id: use --help for usage.\n";
+    exit(2);
+  }
+} # while processing ARGV options
+
+# Post option processing set up {
+
+if(!@cols) {
+  @cols = @{$format{$format}[0]};
+} else {
+  for $col (@cols) {
+    $_   = $col;
+    s/:.*//;
+    if(! grep /$_/, @{$format{$format}[0]} ) {
+      die "$id: '$_' is not a known column in format '$format'\n";
+    }
+  }
+}
+
+$pos = 0;
+for $col (@{$format{$format}[0]}) {
+  $pos{$col} = $pos;
+  $pos++;
+}
+
+$re = $format{$format}[1];
+
+$seplen = length($sep);
+
+push(@ARGV, '-') unless @ARGV;
+
+# } post option processing set up
+
+if ($headers) {
+  local $";
+  $" = $sep;
+  print "@cols\n";
+}
+
+for $file (@ARGV) {
+  $err = 0;
+
+  if ($file =~ m:\.([^.]+)$:) {
+    $suf = $1;
+    if (!defined($suffixes{$suf})) {
+      if (defined($suffixes{lc($suf)})) {
+	$suf = lc($suf);
+      } else {
+	$suf = undef;
+      }
+    }
+  }
+
+  if ($suf) {
+    if (!open(IN, "$suffixes{$suf}[1]<$file|")) {
+      warn "$id: Can't open decompress pipe for logfile '$file': $!\n";
+      next;
+    }
+  } else {
+    if (!open(IN, "$file")) {
+      warn "$id: Can't open logfile '$file': $!\n";
+      next;
+    }
+  }
+
+  while(<IN>) {
+    $out  = '';
+    $hide = 0;
+    undef(%q);
+
+    if (@data = /$re/) {
+      for $col (@cols) {
+	# COLSPEC re
+        if ($col =~ /(.+):(.+)/) {
+	  $req = $1;
+	  $id  = $2;
+
+	  $pre =  $data[$pos{$req}];
+	  if ($pre =~ s/\?(.*)//) {
+	    $q = $1;
+          } else {
+	    $q = '';
+          }
+
+          if ( defined($pre) ) {
+	    if(defined($q{$req})) {
+
+	      if (defined($q{$req}{$id})) {
+	        $out .= $q{$req}{$id} . $sep;
+	      } else {
+	        $out .= $undef . $sep;
+		$hide = 1 if $reqall;
+	      }
+
+	    } else {
+
+	      $q{$req}{'@pre'}   = $pre;
+	      $q{$req}{'@query'} = $q;
+	      $q{$req}{'@col'}   = $data[$pos{$req}];
+	      
+	      parseurl(\$pre, $q{$req});       # pull out hostname, etc
+	      parsesimpleform(\$q, $q{$req});  # pull out CGI args
+
+	      if (defined($q{$req}{$id})) {
+	        $out .= $q{$req}{$id} . $sep;
+	      } else {
+	        $out .= $undef . $sep;
+		$hide = 1 if $reqall;
+	      }
+
+	    }
+
+	  } else {
+            $out .= $undef . $sep;
+	    $hide = 1 if $reqall;
+	  }
+
+	} else {
+          $out .= $data[$pos{$col}] . $sep;
+	}
+
+      } # for $col
+
+      if($seplen) {
+        substr($out, -$seplen, $seplen, "\n");
+      } else {
+        $out .= "\n";
+      }
+
+      # Apply filters
+      if (!$hide and $filter) {
+        for $filt (@filter) {
+	  $col = ${$filt}{col};
+	  $val = ${$filt}{val};
+	  $op  = ${$filt}{op};
+
+	  # COLSPEC re
+	  if ($col =~ s/:.*//) {
+	    # col requires parsing
+
+	    $pre = $data[$pos{$col}];
+	    if( $pre =~ s/\?(.*)// ) {
+	      $q = $1;
+	    } else {
+	      $q = '';
+	    }
+	    $vbl = ${$filt}{vbl};
+
+	    if (!defined($q{$col})) {
+	      $q{$req}{'@pre'}   = $pre;
+	      $q{$req}{'@query'} = $q;
+	      $q{$req}{'@col'}   = $data[$pos{$req}];
+
+	      parseurl(\$pre, $q{$col});      # pull out hostname, etc
+	      parsesimpleform(\$q, $q{$col}); # pull out CGI args
+	    }
+
+	    if (defined($q{$col}{$vbl})) {
+	      $rc = comp(\$q{$col}{$vbl}, $op, \$val);
+	      $hide = 1 unless $rc;
+#	      print STDERR "comp returned $rc; hide is $hide\n" if $debug;
+	    } else {
+	      $hide = 1;
+	      last;
+	    }
+
+	  } else {
+	    # col does not require parsing
+	    $rc = comp(\$data[$pos{$col}], $op, \$val);
+	    $hide = 1 unless $rc;
+#	    print STDERR "comp returned $rc; hide is $hide\n" if $debug;
+	  }
+
+	  last if $hide;
+	} # for filt in %filter
+      } # if filtering
+
+      print $out unless $hide;
+    } else {
+      print STDERR "Error for $_" if $debug;
+      $err ++;
+    }
+
+  } # while <IN>
+
+  if ($err and !$quiet) {
+    print STDERR "$id: $err parse errors (over $. lines) for $file\n";
+  }
+  close IN;
+} # for file @ARGV
+
+exit(0);
+
+sub parsesimpleform ($$) {
+   my $formthing = shift;
+   my $in = shift;
+   my $field;
+   my @fields;
+   
+   # Expects something like:
+   # foo=wow%21&bar=mitzvah&baz=blah
+
+   # Split the string into each of the key-value pairs
+   (@fields) = split('&', $$formthing);
+
+   # For each of these key-value pairs, decode the value
+   for $field (@fields)   {
+     my $name;
+     my $value;
+     
+     if (!defined($field) or !length($field)) {
+       next;
+     }
+
+     # Split the key-value pair on the equal sign.
+     ($name, $value) = split('=', $field, 2);
+
+     if(!defined($value)) {
+       if(!exists ${$in}{$name}) {
+         ${$in}{$name} = undef;
+       }
+     } else {
+       # Change all plus signs to spaces. This is an
+       # remnant of ISINDEX
+       $value =~ y/\+/ /;
+
+       # Decode the value & removes % escapes.
+       $value =~ s/%([\da-f]{1,2})/pack('C',hex($1))/eig;
+
+       # Create the appropriate entry in the
+       # associative array lookup
+       if(defined ${$in}{$name})     {
+	 # If there are multiple values, separate
+	 ${$in}{$name} .= $join.$value;
+       }     else     {
+	 ${$in}{$name} = $value;
+       }
+     }
+   }
+
+   1;
+} # end &parsesimpleform 
+
+sub parseurl ($$) {
+   my $thing = shift;
+   my $in = shift;
+   my $uri = '';
+
+   if ($$thing =~ m,^(\w+)://([^/]*)(/.*),) {
+     my $hostspec = $2;
+     ${$in}{'@scheme'}   = $1;
+     ${$in}{'@hostspec'} = $2;
+     ${$in}{'@uri'}      = $3;
+     $uri                = $3;
+
+     if ($hostspec =~ m,(?:([^:@]+):)?([^@]+)@,) {
+       if (defined($1)) {
+         ${$in}{'@user'}   = $1;
+         ${$in}{'@passwd'} = $2;
+       } else {
+         ${$in}{'@user'}   = $2;
+       }
+     }
+
+     if ($hostspec =~ m,([^:@]+)(?::(\d+))?$,) {
+       ${$in}{'@host'} = $1;
+       ${$in}{'@port'} = $2 if defined($2);
+     }
+   } else {
+     ${$in}{'@uri'}      = $$thing;
+     $uri                = $$thing;
+   }
+
+   my $n = 1;
+   my $prepath = '';
+
+   while( $uri =~ m:/*(/[^/]*):g ) {
+     $prepath .= $1;
+     ${$in}{"\@path$n"} = $prepath;
+     $n ++; 
+   }
+} # end &parseurl
+
+sub comp ($$$) {
+  my $rhs = shift;
+  my $op  = shift;
+  my $val = shift;
+  local $^W;
+  $^W = 0;
+
+#  if ($debug) {
+#    print STDERR "Trying to eval $$rhs $op $$val\n";
+#  }
+
+  if      ($op eq '=~') {	# RE match
+    return  ($$rhs =~ /$$val/o);
+  } elsif ($op eq '!~') {	# not RE match
+    return  ($$rhs !~ /$$val/o);
+  } elsif ($op eq '=') {	# numerically equal
+    return  ($$rhs == $$val);
+  } elsif ($op eq '!=') {	# not numerically equal
+    return  ($$rhs != $$val);
+  } elsif ($op eq '>') {	# numerically greater
+    return  ($$rhs >  $$val);
+  } elsif ($op eq '<') {	# numerically less than
+    return  ($$rhs <  $$val);
+  } elsif ($op eq '>=') {	# numerically greater or equal
+    return  ($$rhs >= $$val);
+  } elsif ($op eq '<=') {	# numerically less than or equal
+    return  ($$rhs <= $$val);
+  } elsif ($op eq '==') {	# identical (string equal)
+    return  ($$rhs eq $$val);
+  } elsif ($op eq '!==') {	# not identical (string equal)
+    return  ($$rhs ne $$val);
+  } elsif ($op eq '?') {	# must exist
+    return   1;
+  } else {
+    warn "$id: unknown op '$op' in &comp()\n";
+    return 1;
+  }
+} # end &comp 
+
+sub usage ($) {
+  my $exit = shift;
+
+  print <<"ENDusageMess";
+$id usage:
+
+	logprint [ options ] [ logfile ]
+	logprint [ usage-info ] 
+
+logprint prints parts of log files (geared towards apache logs). It
+will attempt to automatically uncompress logs for which it has
+filenames. The '-' filename can be used for stdin.
+
+Options
+    -f NAME     --format NAME      consider logfile to have format NAME
+    -c COLSPEC  --columns COLSPEC  output specified columns for each entry
+    -F FILTSPEC --filter FILTSPEC  apply filter (can be used multiple times)
+    -s SEP      --seperator SEP    use SEP to seperate columns (def: tab)
+    -j SEP      --multi-join SEP   use SEP to join multiple values (def: &)
+    -u STR      --undef STR        use STR for undefined values (def: [undef])
+    -h          --headers          print column name headers
+    -r          --require-all      require all COLSPEC cols be defined to print
+    -q          --quiet            do not report parse errors
+    -D          --debug            turn on debug output
+
+Usage Info
+    --help                 print this message
+    --examples             print example usages
+    --known-formats        list known log formats
+    --known-compressions   list known compression formats
+    --version              print version info
+
+Format of COLSPEC
+    colname[:VARID][,colname[:VARID]...]
+
+    The COLSPEC is a comma seperated list of columns to print.
+    Available columns vary by format. If a column name has a
+    colon and identifer after it, then logprint will attempt to
+    print the CGI argument with that identifier from that column,
+    rather than printing the whole value of the column.
+
+    If an identifier appears multiple times, the values will be
+    joined with the multi-join seperator.
+
+Format of FILTSPEC
+    colname[:VARID]OPvalue
+
+    Operator OP can be one of
+
+    	=~	RE match
+    	!~	not RE match
+	=	numerically equal
+	!=	not numerically equal
+	>	numerically greater
+	<	numerically less than
+	>=	numerically greater or equal
+	<=	numerically less than or equal
+	==	identical (string equal)
+	!==	not identical (string equal)
+	?	must exist
+
+    As per perl convention, non-numbers will be considered
+    zero for numerical comparisions. The '?' operator is useful
+    for ensuring that a CGI identifer is present. To check for
+    'exists and non-empty' use an RE like '.' A non-existant
+    CGI identifer will cause a no match. If any filter does not
+    match for a line, the line won't be printed.
+
+    Filters do not have to be applied to columns being printed,
+    unlike the -r/--require-all option.
+
+Format of VARID
+    Normal variable identifiers are expected to match /\\w+/, that
+    is one or more of 'A' to 'Z', 'a' to 'z', '0' to '9' and '_'.
+    There are several special variables that might also be defined:
+
+	\@col       the whole col
+	\@pre       everything before the first ? in the col
+	\@hostspec  a hostname with username, password, and port, as available
+	\@host      hostname
+	\@port      port number
+	\@user      user name
+	\@passwd    password
+	\@scheme    URL scheme (http, https, etc)
+	\@query     full CGI query string
+	\@uri       local part of the URL (eg pathname and file)
+
+ENDusageMess
+
+  exit($exit);
+} # end &usage 
+
+sub usage_comps () {
+
+  print "Understood compression suffixes:\n\n";
+
+  printf("    %-8s\t%-8s\t%-8s\n", 'Suffix', 'format','tool used');
+  print "  " . "-"x52 . "\n";
+  for $suf (keys %suffixes) {
+    printf("    %-8s\t%-8s\t%-8s\n", $suf,
+    	$suffixes{$suf}[0], $suffixes{$suf}[1]);
+  }
+
+  exit(0);
+} # end &usage_comps
+
+sub usage_formats () {
+  my $form;
+
+  $" = ", ";
+  format STDOUT_TOP =
+
+logprint known formats
+
+format name   columns
+---------------------------------------------------------------------
+.
+
+  format STDOUT =
+@<<<<<<<<<<   ^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$form,        $_
+~~            ^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+              $_
+
+.
+
+  for $form (keys %format) {
+    $_ = "@{$format{$form}[0]}";
+    write;
+  }
+
+  print "Default format is $format\n";
+  exit(0);
+} # end &usage_formats 
+
+sub usage_examples () {
+  print <<"ENDexmpls";
+$id example usage
+
+   logprint -c file access_log*
+
+Print the 'file' column from all access logs in the current directory.
+
+   logprint -f panix -F usage==WWW -F 'bytes>0' -c ip,bytes
+
+Print a list of IP addresses and bytes sent for WWW requests in a
+panix request log, but only if the bytes are not zero.
+
+   logprint -c file -F 'status>=400' -F 'status<500' access_log*
+
+Print the 'file' column from all access logs in the current directory,
+if the status is any of the 4xx series.
+
+   logprint -F 'referer=~(?i:altavista)' -f combined -r -h \
+   	-c date,file,referer:query access_log.gz
+
+For all lines in the gzip compressed Apache 'combined' format access_log,
+if the referer contains 'altavista' (case insensitive), and all of
+'date', 'file', and the 'query' paramater in the 'referer' value are
+defined, print the 'date', 'file' and 'referer' 'query' paramater, with
+column headings.
+
+ENDexmpls
+
+  exit(0);
+} # end &usage_examples 
+
+__END__
+
+=head1 NAME
+
+logprint - extract portions of logfiles, geared towards web access logs
+
+=head1 DESCRIPTION
+
+logprint prints parts of log files. It was written with Apache httpd
+access logs in mind. Since weblogs are so often stored compressed, it
+will attempt to automatically uncompress logs for which it has
+filenames. The '-' filename can be used for stdin, but that must be
+uncompressed.
+
+Output is (by default) tab-seperated values, with optional column names.
+
+logprint understands logs as a series of entries, each of which is made
+up of columns. Some columns can be parsed to extract specific parts of
+them. The Apache request line entry (%r) is automatically broken up into
+a B<method>, B<file>, and B<protocol> by the format parser. That B<file>
+column and the sometimes available B<referer> column are usually the only
+useful ones to parse. Parsing occurs when one or more I<VARID> requests
+are made in a I<COLSPEC>.
+
+Parsing errors will discard an entry from further consideration. In
+C<--debug> mode the troublesome log line will be printed to C<STDERR>.
+One common source of parsing errors is bogus I<Referer> data in Apache
+I<combined> logs. If you don't need the extra columns in I<combined>,
+you might prefer to use I<common>, which is a strict subset of
+I<combined>, to discard fewer entries.
+
+=head1 OPTIONS
+
+=over 4
+
+=item *
+
+    -f NAME     --format NAME
+    
+Consider logfile to have format NAME. Use B<--known-formats> to list
+formats available.
+
+=item *
+
+    -c COLSPEC  --columns COLSPEC
+    
+Output specified columns for each log entry that will be printed.
+
+=item *
+
+    -F FILTSPEC --filter FILTSPEC
+    
+Apply filter (can be used multiple times). Only lines that match all
+filters will be printed.
+
+=item *
+
+    -s SEP      --seperator SEP
+    
+Use SEP to seperate columns. The default is tab.
+
+=item *
+
+    -j SEP      --multi-join SEP
+    
+When a CGI variable appears multiple times, eg from a
+E<lt>SELECT MULTIPLEE<gt> statement, the values will be
+concatenated with a delimiter. This sets the seperator
+to join those multiple values. Default is E<amp>.
+
+=item *
+
+    -u STR      --undef STR
+    
+Use STR for undefined values that have been requested (when
+there is not a I<--require-all> specified). Default is '[undef]'.
+
+=item *
+
+    -h          --headers
+    
+Print column name headers.
+
+=item *
+
+    -r          --require-all
+    
+Require all columns to be printed be defined or else output is
+surpressed. 
+
+=item *
+
+    -q          --quiet
+    
+Do not report parse errors.
+
+=item *
+
+    -D          --debug
+    
+Turn on debug output. (Boring.)
+
+=back
+
+There are several special options for usage info.
+
+=over 4
+
+=item *
+
+    --help
+
+Print a brief usage message.
+
+=item *
+
+    --examples
+
+Print some example usages.
+
+=item *
+
+    --known-formats
+
+List known log formats and the data they have.
+
+=item *
+
+    --known-compressions
+
+List known compression suffixes and the tools to decode them.
+
+=item *
+
+    --version
+
+Print version info.
+
+=back
+
+=head2 Format of COLSPEC
+
+    colname[:VARID][,colname[:VARID]...]
+
+The I<COLSPEC> is a comma seperated list of columns to print. Column
+names (I<colname>) can be found in the B<--known-formats> output.
+Variable IDs (I<VARID>) give access to CGI variables and a few other
+things.
+
+Available columns vary by format. If a column name has a
+colon and I<VARID> (variable identifier) after it, then logprint
+will attempt to print the CGI argument with that identifier from
+that column, rather than printing the whole value of the column.
+
+If a CGI identifier appears multiple times, the values will be
+joined with the multi-join seperator.
+
+=head2 Column Data
+
+Here are a list of at least some of the I<colname> data available
+and the typical content. B<Note>: Apache logs "-" for "no data available".
+
+=over 4
+
+=item *	ip
+
+Has the IP address or hostname of the requesting site, whichever was logged.
+
+=item *	identd
+
+Has the identd protocol identity of the user, if that is enabled. This
+is very rarely enabled.
+
+=item *	username
+
+For password protected pages, this is the username provided. Note that
+is might not be a valid username (although that should be producing a
+401 error.)
+
+=item *	date
+
+Day, month, and year of the request. Order may vary by format.
+
+=item *	time
+
+Hour, minute and second of the request. Format may vary.
+
+=item *	tz
+
+Time zone for the logged time.
+
+=item *	method
+
+'GET', 'POST', 'HEAD' etc from the client request.
+
+=item *	file
+
+URI (or sometimes, URL) from the client request.
+
+=item *	protocol
+
+Probably 'HTTP/1.0' or 'HTTP/1.1'. HTTP/0.9 does not use a protocol string.
+
+=item *	status
+
+'200' means success, '404', means file not found, etc.
+
+=item * bytes
+
+Bytes sent to the client. May be '-' for header only responses.
+
+=item * referer
+
+Contents of the 'Referer' request header.
+
+=item * client
+
+Contents of the 'User-Agent' request header.
+
+=item * other
+
+Anything found after the parsed portion of the line.
+
+=item * ownerid
+
+(Panix) Numerical owner-id of the file requested.
+
+=item * usage
+
+(Panix) Typically 'WWW' or 'FTP'.
+
+=item * server
+
+(Panix) Name of the server that handled the request.
+
+=back
+
+=head2 Format of FILTSPEC
+
+    colname[:VARID]OPvalue
+
+The operator I<OP> can be one of
+
+    	=~	regular expression match
+    	!~	regular expression non-match
+	=	numerically equal
+	!=	not numerically equal
+	>	numerically greater
+	<	numerically less than
+	>=	numerically greater or equal
+	<=	numerically less than or equal
+	==	identical (string equal)
+	!==	not identical (string equal)
+	?	must exist
+
+As per perl convention, non-numbers will be considered
+zero for numerical comparisions. The C<?> operator is useful
+for ensuring that a CGI identifer is present. To check for
+'exists and non-empty' use an regular expression like C<.> A
+non-existant CGI identifer will cause a no match. If any
+filter does not match for a line, the line won't be printed.
+
+Filters do not have to be applied to columns being printed,
+unlike the B<--require-all> option.
+
+=head2 Format of VARID
+
+Normal variable identifiers are expected to match /\w+/, that
+is one or more of 'A' to 'Z', 'a' to 'z', '0' to '9' and '_'.
+There are several special variables that might also be defined:
+
+    @col       the whole col
+    @pre       everything before the first ? in the col
+    @hostspec  a hostname with username, password, and port, as available
+    @host      hostname
+    @port      port number
+    @user      user name
+    @passwd    password
+    @scheme    URL scheme (http, https, etc)
+    @query     full CGI query string
+    @uri       local part of the URL (eg pathname and file)
+    @path1     first / delim part in URI
+    @path2     first and second / delim part in URI
+    @pathN     first to Nth / delim part in URI
+
+For example, a C<referer> of
+
+    http://eli:S3CrET@some.machine:8080/cgi/readmail?mess=17&f=1
+
+Would cause these special variables to exist and have these values:
+
+    @col       http://eli:S3CrET@some.machine:8080/cgi/readmail?mess=17&f=1
+    @pre       http://eli:S3CrET@some.machine:8080/cgi/readmail
+    @hostspec  eli:S3CrET@some.machine:8080
+    @host      some.machine
+    @port      8080
+    @user      eli
+    @passwd    S3CrET
+    @scheme    http
+    @query     mess=17&f=1
+    @uri       /cgi/readmail
+    @path1     /cgi
+    @path2     /cgi/readmail
+
+=head2 RFC1945 Status Codes
+
+For understanding the B<status> column, here is the RFC1945 explanation
+of the status codes. (RFC1945 defines HTTP/1.0.)
+
+The first digit of the Status-Code defines the class of response. The
+last two digits do not have any categorization role. There are 5
+values for the first digit:
+
+=over 4
+
+=item *	1xx
+
+Informational - Not used, but reserved for future use
+
+=item *	2xx
+
+Success - The action was successfully received, understood,
+and accepted.
+
+=item *	3xx
+
+Redirection - Further action must be taken in order to
+complete the request
+
+=item *	4xx
+
+Client Error - The request contains bad syntax or cannot
+be fulfilled
+
+=item *	5xx
+
+Server Error - The server failed to fulfill an apparently
+valid request
+
+=back
+
+And here is the complete list of status codes from RFC1945 and RFC2616.
+(RFC2616 defines HTTP/1.1.) Included is which version of the protocol
+each response first appeared in.
+
+    100	 Continue                            HTTP/1.1
+    101	 Switching Protocols                 HTTP/1.1
+    200	 OK                                  HTTP/1.0
+    201	 Created                             HTTP/1.0
+    202	 Accepted                            HTTP/1.0
+    203	 Non-Authoritative Information       HTTP/1.1
+    204	 No Content                          HTTP/1.0
+    205	 Reset Content                       HTTP/1.1
+    206	 Partial Content                     HTTP/1.1
+    300	 Multiple Choices                    HTTP/1.1
+    301	 Moved Permanently                   HTTP/1.0
+    302	 Found                               HTTP/1.0
+    303	 See Other                           HTTP/1.1
+    304	 Not Modified                        HTTP/1.0
+    305	 Use Proxy                           HTTP/1.1
+    307	 Temporary Redirect                  HTTP/1.1
+    400	 Bad Request                         HTTP/1.0
+    401	 Unauthorized                        HTTP/1.0
+    402	 Payment Required                    HTTP/1.1
+    403	 Forbidden                           HTTP/1.0
+    404	 Not Found                           HTTP/1.0
+    405	 Method Not Allowed                  HTTP/1.1
+    406	 Not Acceptable                      HTTP/1.1
+    407	 Proxy Authentication Required       HTTP/1.1
+    408	 Request Time-out                    HTTP/1.1
+    409	 Conflict                            HTTP/1.1
+    410	 Gone                                HTTP/1.1
+    411	 Length Required                     HTTP/1.1
+    412	 Precondition Failed                 HTTP/1.1
+    413	 Request Entity Too Large            HTTP/1.1
+    414	 Request-URI Too Large               HTTP/1.1
+    415	 Unsupported Media Type              HTTP/1.1
+    416	 Requested range not satisfiable     HTTP/1.1
+    417	 Expectation Failed                  HTTP/1.1
+    500	 Internal Server Error               HTTP/1.0
+    501	 Not Implemented                     HTTP/1.0
+    502	 Bad Gateway                         HTTP/1.0
+    503	 Service Unavailable                 HTTP/1.0
+    504	 Gateway Time-out                    HTTP/1.1
+    505	 HTTP Version not supported          HTTP/1.1
+
+
+=head1 SEE ALSO
+
+perlre(1) for perl regular expression help.
+
+=head1 OSNAMES
+
+Auto-decompression probably requires Unix and certainly requires
+the expected decompression tools. See I<--known-compressions> to
+see the tools used.
+
+=head1 TODO
+
+Some sort of config file.
+IP address masks.
+
+=head1 BUGS
+
+No effort is made to encode the column seperator when it appears
+in the data.
+
+=head1 COPYRIGHT
+
+Copyright 2001 by Eli the Bearded / Benjamin Elijah Griffin.
+Released under the same license(s) as Perl.
+
+=head1 AUTHOR
+
+Eli the Bearded uses this to slice and dice Apache logs.
+
+=cut
+

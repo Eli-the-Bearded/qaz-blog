@@ -1,0 +1,557 @@
+#!/usr/local/bin/perl
+# Adds numbers selectively.
+#
+# Benjamin Elijah Griffin		13 Sep 1999
+use strict;
+use vars qw( $tag $total $one $dot $line @range $tagcol @order %totals
+	     $numre $split $int $info $tab $nl $lnum $file $merge );
+
+my $VERSION = 1.0;
+
+my $debug = 0;
+
+$total = 0;	# running total
+
+# Options
+$one = 1;		# add only first number per line
+$dot = 0;		# add until '.' on a line by itself
+$line = 0;		# add all numbers on a line, then reset
+$int = 1;		# assume integers
+$info = 1;		# print informational text
+$merge = 0;             # merge input files
+$split = undef;		# seperator regexp for split
+$numre = qr/(-?\d+)/;	# regexp to match numbers
+$tagcol = undef;	# column to grab tag from
+$tag = 'total:';	# what to print before each result (unless $tagcol)
+$tab = "\t";		# output field seperator
+$nl  = "\n";            # output record seperator
+
+while(defined($ARGV[0]) and substr($ARGV[0], 0, 1) eq '-') {
+  if (($ARGV[0] eq '-1') or ($ARGV[0] eq '--one'))  {
+    $one = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-d') or ($ARGV[0] eq '--delim'))  {
+    shift;
+    $split = shift;
+    if (!defined($split) or !length($split)) {
+      warn "$0: -d (--delim) requires a regexp argument\n";
+      &usage(2);
+    }
+    eval qq! \$split = qr/$split/; !;
+    if ($@) {
+      die "$0: -d (--delim) regexp did not work: $@\n";
+    }
+
+  } elsif (($ARGV[0] eq '-/') or ($ARGV[0] eq '--irs'))  {
+    shift;
+    $/ = shift;
+    if (!defined($/)) {
+      warn "$0: -/ (--irs) requires an argument\n";
+      &usage(2);
+    }
+
+  } elsif (($ARGV[0] eq '-\\') or ($ARGV[0] eq '--ors'))  {
+    shift;
+    $nl = shift;
+    if (!defined($nl)) {
+      warn "$0: -\\ (--ors) requires an argument\n";
+      &usage(2);
+    }
+
+  } elsif (($ARGV[0] eq '-D') or ($ARGV[0] eq '--outputdelim'))  {
+    shift;
+    $tab = shift;
+    if (!defined($tab)) {
+      warn "$0: -D (--outputdelim) requires an argument\n";
+      &usage(2);
+    }
+
+  } elsif (($ARGV[0] eq '-b') or ($ARGV[0] eq '--label'))  {
+    shift;
+    $tagcol = shift;
+    if (!defined($tagcol) or $tagcol =~ /\D/) {
+      warn "$0: -b (--label) requires a numeric argument\n";
+      &usage(2);
+    }
+    if ($merge) {
+      warn "$0: -b (--label) and -m (--merge-files) don't mix\n";
+    }
+  } elsif (($ARGV[0] eq '-r') or ($ARGV[0] eq '--range'))  {
+
+    shift;
+    $one = -1;
+    my $range = shift;
+    my $each;
+
+    if (!defined($range) or $range !~ /^[\d,-]+$/) {
+      warn "$0: -r (--range) requires an argument\n";
+      &usage(2);
+    }
+
+    $range =~ s/-/../g;
+
+    undef (@range);
+    eval qq{
+      local \$^W;
+      \$^W = 0;
+      for \$each (\@range[$range]) {
+        \$each = 1;
+      }
+    };
+
+    if ($@) {
+      die "$0: -r (--range) range value did not work: $@\n";
+    }
+
+    print "using range: " if $debug;
+    for $each (@range) {
+      $each = 0 unless $each;
+      print "$each " if $debug;
+    }
+    print "\n" if $debug;
+
+    if (!defined($split)) {
+      $split = qr/\s+/;
+    }
+  } elsif (($ARGV[0] eq '-m') or ($ARGV[0] eq '--merge-files'))  {
+    $merge = 1;
+    if (defined($tagcol)) {
+      warn "$0: -b (--label) and -m (--merge-files) don't mix\n";
+    }
+    if ($one == 1) {
+      $one = -1;
+      $range[0] = 1;
+    }
+    shift;
+  } elsif (($ARGV[0] eq '-l') or ($ARGV[0] eq '--line'))  {
+    $line = 1;
+    $one = 0 if ($one == 1);
+    shift;
+  } elsif (($ARGV[0] eq '-a') or ($ARGV[0] eq '--all'))  {
+    $one = 0;
+    shift;
+  } elsif (($ARGV[0] eq '-f') or ($ARGV[0] eq '--float'))  {
+    $int = 0;
+    $numre = qr/( -? \d+\.\d+ | -? \d+ | -? \.\d+ )/x;
+    shift;
+  } elsif (($ARGV[0] eq '-n') or ($ARGV[0] eq '--noinfo'))  {
+    $info = 0;
+    shift;
+  } elsif (($ARGV[0] eq '-.') or ($ARGV[0] eq '--dot'))  {
+    $dot = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-w') or ($ARGV[0] eq '--warn'))  {
+    $^W = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-Z') or ($ARGV[0] eq '--debug'))  {
+    $debug = 1;
+    shift;
+  } elsif (($ARGV[0] eq '-h') or ($ARGV[0] eq '--help')) {
+    &usage(0);
+  } else {
+    print STDERR "$0: $ARGV[0] not a recognized option\n";
+    &usage(2);
+  }
+}
+
+my $tagname = $tag;
+my $num;
+my $i;
+my @a;
+
+while(<>) {
+  if (!defined($file)) {
+    $file = $ARGV;
+    $lnum = 0;
+  } elsif ($file ne $ARGV) {
+    $file = $ARGV;
+    $lnum = 0;
+  }
+
+  $lnum++;
+
+  next if /^\s*$/;
+
+  if (defined($split)) {
+    @a = split(/$split/, $_);
+    local($");
+    $" = ', ';
+    print STDERR "New split: @a\n" if $debug;
+  } else {
+    @a = /$numre/g;
+    local($");
+    $" = ', ';
+    print STDERR "Traditional split: @a\n" if $debug;
+  }
+
+  if ($dot and $_ eq ".\n") {
+    undef @a;
+  }
+  
+  $i = 0;
+  foreach $num (@a) {
+    if ($one < 0) {
+
+      if (defined($tagcol)) {
+        $tagname = $a[$tagcol];
+	if (!defined($tagname)) {
+	  $tagname = '[undef]';
+	}
+      } # if tagcol
+
+      if($merge) {
+        $tagname = $lnum;
+      }
+
+      print "Tagname is $tagname\n" if $debug;
+
+      if(!exists($totals{$tagname})) {
+        push(@order, $tagname);
+	$totals{$tagname} = 0;
+      }
+
+      print "Adding $num to $tagname\n" if $debug and $range[$i];
+      $totals{$tagname} += $num if $range[$i];
+
+    } else {
+      $total += $num;
+      last if $one > 0;
+    }
+    $i ++;
+  }
+
+  if ($line or ($dot and $_ eq ".\n")) {
+    if ($dot or $line) {
+      &printtotals();
+    }
+    next if $dot;
+  }
+} # while <>
+
+print $nl if $info;
+&printtotals();
+
+exit(0);
+
+sub printtotals() {
+  my $tag;
+
+  if ($one < 0) {
+    if (@order and $info and (defined($tagcol) or $merge)) {
+      if($merge) {
+        print "line${tab}sum${nl}";
+      } else {
+        print "label${tab}sum${nl}";
+      }
+    }
+    for $tag (@order) {
+      if (!$merge or $info) {
+        print "$tag${tab}";
+      }
+      print "$totals{$tag}$nl";
+    }
+    undef(%totals);
+    undef(@order);
+  } else {
+    print "$tagname${tab}" if $info;
+    print "$total$nl";
+    $total = 0;
+  }
+}
+
+sub usage ($) {
+  my $exit = shift;
+
+  print <<"EndUsage";
+$0 version $VERSION usage:
+  adder [options] <file 
+
+Options:
+  -. --dot            print a total and reset upon input of a '.' on a line
+  -1 --one            use first number on each line only (default)
+  -a --all            use all numbers on each line
+  -l --line           work on a per-line basis, --all becomes default range
+  -f --float          allow floats (numbers with decimals)
+  -n --noinfo         surpress informational text (better for parsing output)
+  -m --merge-files    adds corresponding lines in multiple files
+  -d --delim  RE      use RE to split each line
+  -D --outputdelim  DELIM
+                      use DELIM string to delimit output (default tab)
+  -/ --irs    RECSEP  use RECSEP as the input record seperator (default \\n)
+  -\\ --ors    RECSEP  use RECSEP as the output record seperator (default \\n)
+  -b --label  N       use column N as a label for the data (sums per label)
+  -r --range  RANGE   add only numbers specified by the range (see below)
+  -w --warn           turn on warnings
+  -Z --debug          turn on debug output
+
+If a delimiter is not specified with -d or --delim, the line is split
+using the following method: if range is set, split on whitespace,
+otherwise grab all number stretches from the line.
+
+The format of a range is similar to that used by cut(1) or in newsrc
+files. "2,3" indicates columns two and three, "4-7" indicates columns
+four through seven, and "2,3,4-7" would be columns two through seven.
+Column numbers start at zero (0) and open-ended ranges are not allowed.
+
+See 'perldoc $0' for full docs.
+EndUsage
+
+  exit($exit);
+} # end &usage 
+
+__END__
+ 
+$ adder -b 0 -r 1,2 -d :
+01:23:34
+02:35:56
+03:99:01
+04:55:33:^H
+04:11:00
+label	sum
+01	57
+02	91
+03	100
+04	99
+
+
+=head1 NAME
+
+adder - general purpose summing tool
+
+=head1 README
+
+This is a general purpose summing tool which has some notion of columns
+and data labels.
+
+=head1 DESCRIPTION
+
+B<adder> adds up numbers. By default it adds up the first number
+found on each line of input and then gives a result. It can be
+configured to add up all numbers on every line and then give a
+result; some numbers on all lines; numbers associated with labels;
+etc.
+
+=head1 USAGE
+
+  	adder [options] [file ...]
+
+Options:
+
+=over 4
+
+=item *
+
+  -. --dot 
+  
+Print a total and reset upon input of a '.' on a line.
+
+=item *
+
+  -1 --one
+  
+Use first number on each line only (default).
+
+=item *
+
+  -a --all 
+
+Use all numbers on each line. (Default for per-line mode.)
+
+=item *
+
+  -l --line 
+  
+Work on a per-line basis, --all becomes default range.
+
+=item *
+
+  -f --float  
+  
+Allow floats (numbers with decimals).
+
+=item *
+
+  -n --noinfo 
+  
+Surpress informational text (better for parsing output).
+
+
+=item *
+
+  -m --merge-files
+  
+Adds corresponding lines in multiple files. (Not compatible
+with line labels.)
+
+=item *
+
+  -d --delim  RE
+  
+Use I<RE> to split each line. The regular expression can
+be any perl RE, and will be used by C<split>, so be careful
+about parentheses.
+
+=item *
+
+  -D --outputdelim  DELIM
+
+Use I<DELIM> string to delimit output (default is tab).
+
+=item *
+
+  -/ --irs    RECSEP
+  
+Use I<RECSEP> as the input record seperator (default is newline).
+
+=item *
+
+  -\ --ors    RECSEP
+  
+Use I<RECSEP> as the output record seperator (default is newline).
+You will probably need C<-\\> to escape the \ for the shell.
+
+=item *
+
+  -b --label  N
+  
+Use column I<N> as a label for the data. Lines that have different
+labels are summed separately. Column numbers start at zero. (Not
+compatible with merging files.)
+
+=item *
+
+  -r --range  RANGE
+  
+Add only numbers specified by the range. Range is specified similar
+to B<cut(1)>, but the columns begin numbering at 0 and open-ended
+ranges are not allowed. Column numbers are comma seperated, and
+ranges of columns are seperated by a hyphen. So C<1,3-5> denotes
+columns one, three, four, and five (but don't forget that zero
+is the first column).
+
+=item *
+
+  -w --warn
+  
+Turn on perl warnings.
+
+=item *
+
+  -Z --debug
+  
+Turn on debug output.
+
+=item *
+
+  -h --help              
+
+Show usage and exit.
+
+=back
+
+=head1 EXAMPLES
+
+
+The label option is a powerful way to sum and merge data. Consider
+two lists of data like:
+
+	LIST A                      LIST B
+       --------------------------------------------
+	01/Nov/2000:14              04/Nov/2000:21
+	02/Nov/2000:34              03/Nov/2000:14
+	03/Nov/2000:13              02/Nov/2000:10
+	04/Nov/2000:13              01/Nov/2000:28
+
+To produce a per day sum, one could use C<adder -r 1 -b 0 -d :>
+and get results like this:
+
+	label	sum
+	01/Nov/2000	42
+	02/Nov/2000	44
+	03/Nov/2000	27
+	04/Nov/2000	34
+
+There is a single tab between 'label' and 'sum', and a single
+tab between the date and the sum. Lines will appear in the
+order the labels were first seen.
+
+Sometimes instead of labels you'll want to add correspoding lines
+of seperate files. B<adder> has the -m (--merge-files) option to 
+help there. It internally uses the line numbers as labels, so
+-m (--merge-files) is incompatible with -b (--label).
+
+For three files like:
+
+	FILE A       FILE B         FILE C
+       --------------------------------------------
+         1            4              2
+	 2            3              20
+	 3            2              200
+	 4            1              2000
+
+C<adder -m A B C> will produce output like:
+
+	line	sum
+	1	7
+	2	25
+	3	205
+	4	2005
+
+To surpress the line numbers, use -n (--noinfo).
+
+To add user IDs to group IDs from an /etc/passwd file, and print
+the answers out with the user names, with output still serpated
+by colons:
+
+	$ adder -b 0 -d : -D : -r 2,3 -l -n /etc/passwd
+	root:0
+	bin:2
+	daemon:4
+	adm:7
+	lp:11
+	sync:5
+	shutdown:6
+	halt:7
+	mail:20
+	news:22
+
+
+=head1 PREREQUISITES
+
+Perl 5.005 is required to use the C<qr//> operator. The regular expressions
+available are limited to your installed version of perl. The C<strict>
+and C<vars> pragma modules are used.
+
+=head1 COREQUISITES
+
+No optional CPAN modules needed.
+
+=head1 OSNAMES
+
+Should not be operating system dependent.
+
+=head1 BUGS
+
+Probably. Interaction of multiple options has not been
+thoroughly tested.
+
+=head1 SEE ALSO
+
+L<perlre>(1) for regular expression help
+
+=head1 COPYRIGHT
+
+Copyright 2000 by Eli the Bearded / Benjamin Elijah Griffin.
+Released under the same license(s) as Perl.
+
+=head1 AUTHOR
+
+Eli the Bearded has wondered aloud why Unix lacks this tool.
+
+=head1 SCRIPT CATEGORIES
+
+=pod SCRIPT CATEGORIES
+
+Math
+
+=cut
