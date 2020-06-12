@@ -4,6 +4,9 @@ A blog, based on blosxom.
 
 Posts about the code:
 
+https://qaz.wtf/qz/blosxom/2020/06/12/logtools
+  * Describe tools in etc/logtols/
+
 https://qaz.wtf/qz/blosxom/2020/05/28/sitemap
   * Two plugins added, one mine, one not mine.
   * `gsitemap`: not mine, helper for making sitemap.xml files
