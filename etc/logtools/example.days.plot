@@ -1,4 +1,4 @@
-et title "bytes per day"
+set title "bytes per day"
 set terminal png
 set output 'logbytes.png'
 
@@ -14,10 +14,8 @@ set xrange ["01/Jan/2020":"10/Jun/2020"]
 # rotate by -90 does
 set xtics format '%b %d' rotate by -90
 
-set arrow from "28/May/2020", 4e8 to "28/May/2020",8e8   nohead front ls
-2
-set label 1 'sitemap added' at "25/May/2020",4.9e8  rotate by 90 center
-tc ls 2
+set arrow from "28/May/2020", 4e8 to "28/May/2020",8e8 nohead front ls 2
+set label 1 'sitemap added' at "25/May/2020",4.9e8  rotate by 90 center tc ls 2
 
 # don't bother labeling lines ("unset key" is the old way to do this)
 set nokey
