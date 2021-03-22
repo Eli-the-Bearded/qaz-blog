@@ -106,4 +106,40 @@ Code { background-color: black; color: #94ed30;
   .imgbox > img { width: 90vw; height: auto; }
 }
 
+/* for blockquoted posts */
+.usenetpost { border: 0; margin: 1em; font-family: courier,monospace; }
 
+/* for snail mail rendered as a table */
+.postalletter { border: 0; margin: 1em; font-family: courier,monospace; }
+.letterbodycell { width: 100% }
+.recipientcell { width: 30% }
+.returnaddresscell { width: 30% }
+
+
+.puremagenta { background: MediumVioletRed; color: MediumVioletRed; }
+.pureyellow { background: yellow; color: yellow; }
+.purewhite { background: white; color: white; }
+.purecyan { background: cyan; color: cyan; }
+.pureblue { background: blue; color: blue; }
+.puregreen { background: green; color: green; }
+.purered { background: red; color: red; }
+.pureblack { background: black; color: black; }
+.purewhite { background: white; color: white; }
+
+.blackonmagenta { background: MediumVioletRed; color: black; }
+.blackonyellow { background: yellow; color: black; }
+.blackonwhite { background: white; color: black; }
+.blackoncyan { background: cyan; color: black; }
+.blackonblue { background: blue; color: black; }
+.blackongreen { background: green; color: black; }
+.blackonred { background: red; color: black; }
+.blackonpurple { background: fuchsia; color: black; }
+
+.magentaonblack { background: black; color: MediumVioletRed; }
+.yellowonblack { background: black; color: yellow; }
+.whiteonblack { background: black; color: white; }
+.cyanonblack { background: black; color: cyan; }
+.blueonblack { background: black; color: blue; }
+.greenonblack { background: black; color: green; }
+.redonblack { background: black; color: red; }
+.purpleonblack { background: black; color: fuchsia; }
